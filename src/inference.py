@@ -17,6 +17,7 @@ from .ar.t2s_model import Text2SemanticDecoder
 from .text.text_cleaner import clean_text_inf
 import safetensors.torch as st
 import json
+from io import BytesIO
 from typing import Literal
 
 device = "cuda" if torch.cuda.is_available() else "cpu"
@@ -150,20 +151,9 @@ def resample(audio_tensor, sr0, sr1, device):
     return resample_transform_dict[key](audio_tensor)
 
 
-def get_spepc(
-    filter_length, sampling_rate, hop_length, win_length, filename, dtype, device
-):
-    sr1 = int(sampling_rate)
-    audio, sr0 = torchaudio.load(filename)
-    if sr0 != sr1:
-        audio = audio.to(device)
-        if audio.shape[0] == 2:
-            audio = audio.mean(0).unsqueeze(0)
-        audio = resample(audio, sr0, sr1, device)
-    else:
-        audio = audio.to(device)
-        if audio.shape[0] == 2:
-            audio = audio.mean(0).unsqueeze(0)
+def get_spepc(filter_length, sr1, hop_length, win_length, audio, dtype, device):
+    if audio.shape[0] == 2:
+        audio = audio.mean(0).unsqueeze(0)
 
     maxx = audio.abs().max()
     if maxx > 1:
@@ -298,6 +288,11 @@ def get_tts_wav(
     zero_wav_torch = torch.zeros(
         int(sampling_rate * pause_second), dtype=dtype, device=device
     )
+    if ref_wav_path is not None and isinstance(ref_wav_path, bytes):
+        ref_wav_path_2 = BytesIO(ref_wav_path)
+        ref_wav_path = BytesIO(ref_wav_path)
+    else:
+        ref_wav_path_2 = ref_wav_path
     if not ref_free:
         with torch.no_grad():
             wav16k, _sr = librosa.load(ref_wav_path, sr=16000)
@@ -366,12 +361,19 @@ def get_tts_wav(
         if inp_refs:
             for path in inp_refs:
                 try:
+                    audio = librosa.load(path, sr=sampling_rate)[0]
+                    audio = (
+                        torch.from_numpy(audio)
+                        .to(device=device)
+                        .squeeze(-1)
+                        .unsqueeze(0)
+                    )
                     refer, audio_tensor = get_spepc(
                         filter_length,
                         sampling_rate,
                         hop_length,
                         win_length,
-                        path.name,
+                        audio,
                         dtype,
                         device,
                     )
@@ -380,12 +382,14 @@ def get_tts_wav(
                 except:
                     traceback.print_exc()
         if len(refers) == 0:
+            audio = librosa.load(ref_wav_path_2, sr=sampling_rate)[0]
+            audio = torch.from_numpy(audio).to(device=device).squeeze(-1).unsqueeze(0)
             refers, audio_tensor = get_spepc(
                 filter_length,
                 sampling_rate,
                 hop_length,
                 win_length,
-                ref_wav_path,
+                audio,
                 dtype,
                 device,
             )
@@ -408,5 +412,5 @@ def get_tts_wav(
         t1 = ttime()
     print("%.3f\t%.3f\t%.3f\t%.3f" % (t[0], sum(t[1::3]), sum(t[2::3]), sum(t[3::3])))
     audio_opt = torch.cat(audio_opt, 0)  # np.concatenate
-    audio_opt = audio_opt.cpu().detach().numpy()
-    return 32000, (audio_opt * 32767).astype(np.int16)
+    audio_opt = audio_opt.float().cpu().detach().numpy()
+    return 32000, audio_opt

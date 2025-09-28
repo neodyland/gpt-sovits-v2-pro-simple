@@ -1,13 +1,15 @@
 from src.inference import get_tts_wav, languages, load
 import gradio as gr
+import numpy as np
 
-load("v2pro")
+load("v2proplus")
 
 
 def inference(
     *args,
 ):
-    yield get_tts_wav(*args)
+    sr, pcm = get_tts_wav(*args)
+    yield sr, (pcm * 32767).astype(np.int16)
 
 
 with gr.Blocks(title="GPT-SoVITS WebUI", analytics_enabled=False) as app:
