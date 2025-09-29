@@ -37,6 +37,13 @@ def clip(y: np.ndarray, sr: int):
     return y_out
 
 
+def transcribe(wav: bytes):
+    segments, info = model.transcribe(
+        BytesIO(wav), language="ja", chunk_length=15, condition_on_previous_text=False
+    )
+    return "".join([segment.text for segment in segments])
+
+
 def synthesize(
     url: str, wav: bytes, text: str, text_language: str, prompt_language: str
 ):
@@ -53,11 +60,8 @@ def synthesize(
             "audio/wav",
         )
     }
-    segments, info = model.transcribe(
-        BytesIO(wav), language="ja", chunk_length=15, condition_on_previous_text=False
-    )
     data = {
-        "prompt_text": "".join([segment.text for segment in segments]),
+        "prompt_text": transcribe(wav),
         "text": text,
         "text_language": text_language,
         "prompt_language": prompt_language,

@@ -6,8 +6,8 @@ import os
 from typing import Any, Dict, List, Tuple
 
 import numpy as np
-import onnxruntime
 import torch
+import onnxruntime
 from opencc import OpenCC
 from pypinyin import Style, pinyin
 from transformers.models.auto.tokenization_auto import AutoTokenizer
@@ -15,11 +15,6 @@ from transformers.models.auto.tokenization_auto import AutoTokenizer
 from ..zh_normalization.char_convert import tranditional_to_simplified
 from .dataset import get_char_phoneme_labels, get_phoneme_labels, prepare_onnx_input
 from .utils import load_config
-
-try:
-    onnxruntime.preload_dlls()
-except:
-    pass
 
 model_version = "1.1"
 

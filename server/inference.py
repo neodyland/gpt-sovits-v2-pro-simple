@@ -50,13 +50,13 @@ bert_model = AutoModelForMaskedLM.from_pretrained(bert_path).to(
 sv_cn_model = SV(device, dtype)
 
 
+@torch.inference_mode()
 def get_bert_feature(text: str, word2ph: Optional[List[int]]):
-    with torch.no_grad():
-        inputs = tokenizer(text, return_tensors="pt")
-        for i in inputs:
-            inputs[i] = inputs[i].to(device)
-        res = bert_model(**inputs, output_hidden_states=True)
-        res = torch.cat(res["hidden_states"][-3:-2], -1)[0].cpu()[1:-1]
+    inputs = tokenizer(text, return_tensors="pt")
+    for i in inputs:
+        inputs[i] = inputs[i].to(device)
+    res = bert_model(**inputs, output_hidden_states=True)
+    res = torch.cat(res["hidden_states"][-3:-2], -1)[0].cpu()[1:-1]
     assert len(word2ph) == len(text)
     phone_level_feature = []
     for i in range(len(word2ph)):
@@ -187,6 +187,7 @@ def get_phones_and_bert(text: str, language: str, final=False):
 cache = {}
 
 
+@torch.inference_mode()
 def get_tts_wav(
     ref_wav_path,  # required
     prompt_text,
@@ -229,19 +230,18 @@ def get_tts_wav(
             return ref_wav_path
 
     if not ref_free:
-        with torch.no_grad():
-            wav16k, _sr = librosa.load(get_path(), sr=16000)
-            if wav16k.shape[0] > 160000 or wav16k.shape[0] < 48000:
-                raise ValueError("Please use a 3~10 seconds reference audio!")
-            wav16k = torch.from_numpy(wav16k)
-            wav16k = wav16k.to(dtype=dtype, device=device)
-            wav16k = torch.cat([wav16k, zero_wav_torch])
-            ssl_content = ssl_model(wav16k.unsqueeze(0))["last_hidden_state"].transpose(
-                1, 2
-            )  # .float()
-            codes = vq_model.extract_latent(ssl_content)
-            prompt_semantic = codes[0, 0]
-            prompt = prompt_semantic.unsqueeze(0).to(device)
+        wav16k, _sr = librosa.load(get_path(), sr=16000)
+        if wav16k.shape[0] > 160000 or wav16k.shape[0] < 48000:
+            raise ValueError("Please use a 3~10 seconds reference audio!")
+        wav16k = torch.from_numpy(wav16k)
+        wav16k = wav16k.to(dtype=dtype, device=device)
+        wav16k = torch.cat([wav16k, zero_wav_torch])
+        ssl_content = ssl_model(wav16k.unsqueeze(0))["last_hidden_state"].transpose(
+            1, 2
+        )  # .float()
+        codes = vq_model.extract_latent(ssl_content)
+        prompt_semantic = codes[0, 0]
+        prompt = prompt_semantic.unsqueeze(0).to(device)
 
     t1 = ttime()
     t.append(t1 - t0)
@@ -276,19 +276,18 @@ def get_tts_wav(
         if i_text in cache and if_freeze == True:
             pred_semantic = cache[i_text]
         else:
-            with torch.no_grad():
-                pred_semantic, idx = t2s_model.infer_panel(
-                    all_phoneme_ids,
-                    all_phoneme_len,
-                    None if ref_free else prompt,
-                    bert,
-                    top_k=top_k,
-                    top_p=top_p,
-                    temperature=temperature,
-                    early_stop_num=hz_x_max_sec,
-                )
-                pred_semantic = pred_semantic[:, -idx:].unsqueeze(0)
-                cache[i_text] = pred_semantic
+            pred_semantic, idx = t2s_model.infer_panel(
+                all_phoneme_ids,
+                all_phoneme_len,
+                None if ref_free else prompt,
+                bert,
+                top_k=top_k,
+                top_p=top_p,
+                temperature=temperature,
+                early_stop_num=hz_x_max_sec,
+            )
+            pred_semantic = pred_semantic[:, -idx:].unsqueeze(0)
+            cache[i_text] = pred_semantic
         t3 = ttime()
         refers = []
         sv_emb = []

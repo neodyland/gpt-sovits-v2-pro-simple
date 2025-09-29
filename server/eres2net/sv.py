@@ -1,5 +1,5 @@
 import torch
-from .ERes2NetV2 import ERes2NetV2
+from .eres2netv2 import ERes2NetV2
 from .kaldi import fbank
 import safetensors.torch as st
 
@@ -20,17 +20,17 @@ class SV:
         self.dtype = dtype
         self.embedding_model = embedding_model
 
+    @torch.inference_mode()
     def compute_embedding3(self, wav):
-        with torch.no_grad():
-            feat = torch.stack(
-                [
-                    fbank(
-                        wav0.unsqueeze(0),
-                        num_mel_bins=80,
-                        sample_frequency=16000,
-                        dither=0,
-                    )
-                    for wav0 in wav.to(dtype=self.dtype)
-                ]
-            )
-            return self.embedding_model.forward3(feat)
+        feat = torch.stack(
+            [
+                fbank(
+                    wav0.unsqueeze(0),
+                    num_mel_bins=80,
+                    sample_frequency=16000,
+                    dither=0,
+                )
+                for wav0 in wav.to(dtype=self.dtype)
+            ]
+        )
+        return self.embedding_model.forward3(feat)

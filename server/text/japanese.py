@@ -2,6 +2,7 @@
 import re
 import os
 import hashlib
+from ..symbols import punctuation
 
 try:
     import pyopenjtalk
@@ -36,9 +37,6 @@ except Exception:
     # failed to load user dictionary, ignore.
     pass
 
-
-from ..symbols import punctuation
-
 # Regular expression matching Japanese without punctuation marks:
 _japanese_characters = re.compile(
     r"[A-Za-z\d\u3005\u3040-\u30ff\u4e00-\u9fff\uff11-\uff19\uff21-\uff3a\uff41-\uff5a\uff66-\uff9d]"
@@ -51,29 +49,6 @@ _japanese_marks = re.compile(
 
 # List of (symbol, Japanese) pairs for marks:
 _symbols_to_japanese = [(re.compile("%s" % x[0]), x[1]) for x in [("％", "パーセント")]]
-
-
-# List of (consonant, sokuon) pairs:
-_real_sokuon = [
-    (re.compile("%s" % x[0]), x[1])
-    for x in [
-        (r"Q([↑↓]*[kg])", r"k#\1"),
-        (r"Q([↑↓]*[tdjʧ])", r"t#\1"),
-        (r"Q([↑↓]*[sʃ])", r"s\1"),
-        (r"Q([↑↓]*[pb])", r"p#\1"),
-    ]
-]
-
-# List of (consonant, hatsuon) pairs:
-_real_hatsuon = [
-    (re.compile("%s" % x[0]), x[1])
-    for x in [
-        (r"N([↑↓]*[pbm])", r"m\1"),
-        (r"N([↑↓]*[ʧʥj])", r"n^\1"),
-        (r"N([↑↓]*[tdn])", r"n\1"),
-        (r"N([↑↓]*[kg])", r"ŋ\1"),
-    ]
-]
 
 
 def post_replace_ph(ph):
@@ -95,20 +70,20 @@ def post_replace_ph(ph):
     return ph
 
 
-def replace_consecutive_punctuation(text):
+def replace_consecutive_punctuation(text: str):
     punctuations = "".join(re.escape(p) for p in punctuation)
     pattern = f"([{punctuations}])([{punctuations}])+"
     result = re.sub(pattern, r"\1", text)
     return result
 
 
-def symbols_to_japanese(text):
+def symbols_to_japanese(text: str):
     for regex, replacement in _symbols_to_japanese:
         text = re.sub(regex, replacement, text)
     return text
 
 
-def preprocess_jap(text, with_prosody=False):
+def preprocess_jap(text: str, with_prosody=False):
     """Reference https://r9y9.github.io/ttslearn/latest/notebooks/ch10_Recipe-Tacotron.html"""
     text = symbols_to_japanese(text)
     # English words to lower case, should have no influence on japanese words.
@@ -224,7 +199,7 @@ def _numeric_feature_by_regex(regex, s):
     return int(match.group(1))
 
 
-def g2p(norm_text, with_prosody=True):
+def g2p(norm_text: str, with_prosody=True):
     phones = preprocess_jap(norm_text, with_prosody)
     phones = [post_replace_ph(i) for i in phones]
     # todo: implement tones and word2ph
