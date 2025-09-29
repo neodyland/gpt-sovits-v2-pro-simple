@@ -9,6 +9,7 @@ dependencies = [
     "einops>=0.8.1",
     "fast-langdetect>=1.0.0",
     "fastapi>=0.117.1",
+    "faster-whisper>=1.2.0",
     "g2p-en>=2.1.0",
     "g2pk2>=0.0.3",
     "gradio>=5.47.2",

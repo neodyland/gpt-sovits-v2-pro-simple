@@ -1,4 +1,4 @@
-from src.inference import get_tts_wav, languages, load
+from server.inference import get_tts_wav, languages, load
 import gradio as gr
 import numpy as np
 

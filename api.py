@@ -1,5 +1,5 @@
-from src.inference import get_tts_wav, load
-from src.textcut import Strategy
+from server.inference import get_tts_wav, load
+from server.textcut import Strategy
 from fastapi import FastAPI, Response, File, Form, UploadFile
 from asyncio import Lock
 from scipy.io import wavfile
