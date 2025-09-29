@@ -34,6 +34,8 @@ def clip(y: np.ndarray, sr: int):
         y_out = y[start:end]
     else:
         y_out = y[:max_len]
+    if len(y_out) != len(y):
+        print(f"Clipped from {len(y) / sr:.2f}s to {len(y_out) / sr:.2f}s")
     return y_out
 
 
@@ -60,15 +62,19 @@ def synthesize(
             "audio/wav",
         )
     }
+    prompt_text = transcribe(wav)
+    print(f"Transcribed prompt text: {prompt_text}")
     data = {
-        "prompt_text": transcribe(wav),
+        "prompt_text": prompt_text,
         "text": text,
         "text_language": text_language,
         "prompt_language": prompt_language,
     }
     response = requests.post(url, data=data, files=files)
     response.raise_for_status()
-    return response.content
+    content = response.content
+    print(f"Transcribed result wav: {transcribe(content)}")
+    return content
 
 
 if __name__ == "__main__":
@@ -76,6 +82,7 @@ if __name__ == "__main__":
     parser.add_argument("--url", type=str, default="http://localhost:7860/synthesize")
     parser.add_argument("--wav", type=str)
     parser.add_argument("--text", type=str, default="こんにちは、元気ですか？")
+    parser.add_argument("--output", type=str, default="test.wav")
     args = parser.parse_args()
     content = synthesize(
         args.url,
@@ -84,6 +91,6 @@ if __name__ == "__main__":
         "auto",
         "ja",
     )
-    with open("test.wav", "wb") as f:
+    with open(args.output, "wb") as f:
         f.write(content)
-    print("Saved as test.wav")
+    print(f"Wrote output to {args.output}")
