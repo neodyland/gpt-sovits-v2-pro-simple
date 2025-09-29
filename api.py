@@ -6,6 +6,12 @@ from scipy.io import wavfile
 from io import BytesIO
 from typing import Literal, Optional, List
 from typing_extensions import Annotated
+import torch
+
+torch.backends.cuda.matmul.allow_tf32 = True
+torch.backends.cudnn.allow_tf32 = True
+torch.backends.cudnn.benchmark = True
+torch.set_float32_matmul_precision("medium")
 
 load("v2proplus")
 

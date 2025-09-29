@@ -5,6 +5,7 @@ from io import BytesIO
 from faster_whisper import WhisperModel
 import numpy as np
 from argparse import ArgumentParser
+import time
 
 model = WhisperModel("kotoba-tech/kotoba-whisper-v2.0-faster")
 
@@ -75,9 +76,11 @@ def synthesize(
         "text_language": text_language,
         "prompt_language": prompt_language,
     }
+    now = time.time()
     response = requests.post(url, data=data, files=files)
     response.raise_for_status()
     content = response.content
+    print(f"Synthesis took {time.time() - now:.2f}s")
     print(f"Transcribed result wav: {transcribe(content)}")
     return content
 
