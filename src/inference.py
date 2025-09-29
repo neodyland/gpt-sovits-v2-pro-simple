@@ -1,5 +1,5 @@
 import traceback
-
+from typing import List, Optional
 import torch
 import torchaudio
 from time import time as ttime
@@ -50,7 +50,7 @@ bert_model = AutoModelForMaskedLM.from_pretrained(bert_path).to(
 sv_cn_model = SV(device, dtype)
 
 
-def get_bert_feature(text, word2ph):
+def get_bert_feature(text: str, word2ph: Optional[List[int]]):
     with torch.no_grad():
         inputs = tokenizer(text, return_tensors="pt")
         for i in inputs:
@@ -66,7 +66,9 @@ def get_bert_feature(text, word2ph):
     return phone_level_feature.T
 
 
-def get_bert_inf(phones, word2ph, norm_text, language: str):
+def get_bert_inf(
+    phones: List[int], word2ph: Optional[List[int]], norm_text: str, language: str
+):
     if language.replace("all_", "") == "zh":
         bert = get_bert_feature(norm_text, word2ph).to(device)  # .to(dtype)
     else:
@@ -218,13 +220,17 @@ def get_tts_wav(
         int(sampling_rate * pause_second), dtype=dtype, device=device
     )
     if ref_wav_path is not None and isinstance(ref_wav_path, bytes):
-        ref_wav_path_2 = BytesIO(ref_wav_path)
-        ref_wav_path = BytesIO(ref_wav_path)
+
+        def get_path():
+            return BytesIO(ref_wav_path)
     else:
-        ref_wav_path_2 = ref_wav_path
+
+        def get_path():
+            return ref_wav_path
+
     if not ref_free:
         with torch.no_grad():
-            wav16k, _sr = librosa.load(ref_wav_path, sr=16000)
+            wav16k, _sr = librosa.load(get_path(), sr=16000)
             if wav16k.shape[0] > 160000 or wav16k.shape[0] < 48000:
                 raise ValueError("Please use a 3~10 seconds reference audio!")
             wav16k = torch.from_numpy(wav16k)
@@ -310,7 +316,7 @@ def get_tts_wav(
                 except:
                     traceback.print_exc()
         if len(refers) == 0:
-            audio = librosa.load(ref_wav_path_2, sr=sampling_rate)[0]
+            audio = librosa.load(get_path(), sr=sampling_rate)[0]
             audio = torch.from_numpy(audio).to(device=device).squeeze(-1).unsqueeze(0)
             refers, audio_tensor = get_spepc(
                 filter_length,

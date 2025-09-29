@@ -4,6 +4,7 @@ from . import english
 from . import japanese
 from . import korean
 from ..symbols import symbols
+from typing import List, Tuple, Optional
 
 language_module_map = {
     "zh": chinese2,
@@ -44,7 +45,7 @@ special = [
 ]
 
 
-def clean_text(text, language):
+def clean_text(text: str, language: str) -> Tuple[List[str], Optional[List[int]], str]:
     if language not in language_module_map:
         language = "en"
         text = " "

@@ -1,3 +1,4 @@
+from typing import List, Tuple
 import re
 
 import fast_langdetect
@@ -239,7 +240,7 @@ class LangSegmenter:
 def segment(
     text: str,
     language: str,
-):
+) -> Tuple[List[str], List[str]]:
     text = re.sub(r" {2,}", " ", text)
     textlist = []
     langlist = []
