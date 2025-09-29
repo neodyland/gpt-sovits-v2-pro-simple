@@ -7,3 +7,5 @@ wheels/
 .venv
 data/
 *.ruff*
+wav/*
+!wav/.gitkeep

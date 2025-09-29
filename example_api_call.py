@@ -87,7 +87,7 @@ if __name__ == "__main__":
     parser.add_argument("--url", type=str, default="http://localhost:7860/synthesize")
     parser.add_argument("--wav", type=str)
     parser.add_argument("--text", type=str, default="こんにちは、元気ですか？")
-    parser.add_argument("--output", type=str, default="test.wav")
+    parser.add_argument("--output", type=str, default="./wav/output.wav")
     args = parser.parse_args()
     content = synthesize(
         args.url,
