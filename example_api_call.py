@@ -10,10 +10,15 @@ model = WhisperModel("kotoba-tech/kotoba-whisper-v2.0-faster")
 
 
 def clip(y: np.ndarray, sr: int):
-    intervals = librosa.effects.split(y, top_db=30)
-
     min_len = 3 * sr
     max_len = 10 * sr
+    # if under 3 seconds, repeat
+    if len(y) < min_len:
+        n_repeat = int(np.ceil(min_len / len(y)))
+        print(f"Input too short ({len(y) / sr:.2f}s), repeating {n_repeat} times")
+        y = np.tile(y, n_repeat)
+        return y
+    intervals = librosa.effects.split(y, top_db=30)
     candidates = []
 
     for start, end in intervals:
