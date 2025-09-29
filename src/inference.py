@@ -1,17 +1,14 @@
-import re
 import traceback
 
 import torch
 import torchaudio
 from time import time as ttime
 import librosa
-import numpy as np
 from .textcut import preprocess_text, splits
 from .mel_processing import spectrogram_torch
 from .eres2net.sv import SV
-from .lang_segmenter import LangSegmenter
+from .lang_segmenter import segment
 from transformers import AutoModelForMaskedLM, AutoTokenizer
-from .cnhubert import CNHubert
 from .gpt_sovits.models import SynthesizerTrn
 from .ar.t2s_model import Text2SemanticDecoder
 from .text.text_cleaner import clean_text_inf
@@ -19,10 +16,17 @@ import safetensors.torch as st
 import json
 from io import BytesIO
 from typing import Literal
+from transformers import (
+    HubertModel,
+)
 
 device = "cuda" if torch.cuda.is_available() else "cpu"
 dtype = torch.float16 if torch.cuda.is_available() else torch.float32
-ssl_model = CNHubert().to(dtype=dtype, device=device).eval()
+ssl_model = (
+    HubertModel.from_pretrained("./data/chinese-hubert-base", local_files_only=True)
+    .to(dtype=dtype, device=device)
+    .eval()
+)
 
 languages = [
     "all_zh",
@@ -62,32 +66,13 @@ def get_bert_feature(text, word2ph):
     return phone_level_feature.T
 
 
-class DictToAttrRecursive(dict):
-    def __init__(self, input_dict):
-        super().__init__(input_dict)
-        for key, value in input_dict.items():
-            if isinstance(value, dict):
-                value = DictToAttrRecursive(value)
-            self[key] = value
-            setattr(self, key, value)
+def get_bert_inf(phones, word2ph, norm_text, language: str):
+    if language.replace("all_", "") == "zh":
+        bert = get_bert_feature(norm_text, word2ph).to(device)  # .to(dtype)
+    else:
+        bert = torch.zeros((1024, len(phones)), dtype=dtype, device=device)
 
-    def __getattr__(self, item):
-        try:
-            return self[item]
-        except KeyError:
-            raise AttributeError(f"Attribute {item} not found")
-
-    def __setattr__(self, key, value):
-        if isinstance(value, dict):
-            value = DictToAttrRecursive(value)
-        super(DictToAttrRecursive, self).__setitem__(key, value)
-        super().__setattr__(key, value)
-
-    def __delattr__(self, item):
-        try:
-            del self[item]
-        except KeyError:
-            raise AttributeError(f"Attribute {item} not found")
+    return bert
 
 
 def load(type: Literal["v2pro", "v2proplus"]):
@@ -99,13 +84,15 @@ def load(type: Literal["v2pro", "v2proplus"]):
         hz_x_max_sec, \
         vq_model, \
         t2s_model
-    hps = DictToAttrRecursive(json.load(open(f"./data/v2pro/{type}.json", "r")))
+    hps = dict(json.load(open(f"./data/v2pro/{type}.json", "r")))
+    filter_length = hps["data"]["filter_length"]
+    hop_length = hps["data"]["hop_length"]
     vq_model = (
         SynthesizerTrn(
-            hps.data.filter_length // 2 + 1,
-            hps.train.segment_size // hps.data.hop_length,
-            n_speakers=hps.data.n_speakers,
-            **hps.model,
+            filter_length // 2 + 1,
+            hps["train"]["segment_size"] // hop_length,
+            n_speakers=hps["data"]["n_speakers"],
+            **hps["model"],
         )
         .to(dtype=dtype, device=device)
         .eval()
@@ -117,10 +104,8 @@ def load(type: Literal["v2pro", "v2proplus"]):
         ),
         strict=False,
     )
-    filter_length = hps.data.filter_length
-    sampling_rate = hps.data.sampling_rate
-    hop_length = hps.data.hop_length
-    win_length = hps.data.win_length
+    sampling_rate = hps["data"]["sampling_rate"]
+    win_length = hps["data"]["win_length"]
 
     config = json.load(open("./data/gsv/config.json", "r"))
     hz_x_max_sec = 50 * config["data"]["max_sec"]  # hz is 50
@@ -171,64 +156,8 @@ def get_spepc(filter_length, sr1, hop_length, win_length, audio, dtype, device):
     return spec, audio
 
 
-def get_bert_inf(phones, word2ph, norm_text, language: str):
-    if language.replace("all_", "") == "zh":
-        bert = get_bert_feature(norm_text, word2ph).to(device)  # .to(dtype)
-    else:
-        bert = torch.zeros((1024, len(phones)), dtype=dtype, device=device)
-
-    return bert
-
-
-def get_phones_and_bert(text, language, final=False):
-    text = re.sub(r" {2,}", " ", text)
-    textlist = []
-    langlist = []
-    if language == "all_zh":
-        for tmp in LangSegmenter.getTexts(text, "zh"):
-            langlist.append(tmp["lang"])
-            textlist.append(tmp["text"])
-    elif language == "all_yue":
-        for tmp in LangSegmenter.getTexts(text, "zh"):
-            if tmp["lang"] == "zh":
-                tmp["lang"] = "yue"
-            langlist.append(tmp["lang"])
-            textlist.append(tmp["text"])
-    elif language == "all_ja":
-        for tmp in LangSegmenter.getTexts(text, "ja"):
-            langlist.append(tmp["lang"])
-            textlist.append(tmp["text"])
-    elif language == "all_ko":
-        for tmp in LangSegmenter.getTexts(text, "ko"):
-            langlist.append(tmp["lang"])
-            textlist.append(tmp["text"])
-    elif language == "en":
-        langlist.append("en")
-        textlist.append(text)
-    elif language == "auto":
-        for tmp in LangSegmenter.getTexts(text):
-            langlist.append(tmp["lang"])
-            textlist.append(tmp["text"])
-    elif language == "auto_yue":
-        for tmp in LangSegmenter.getTexts(text):
-            if tmp["lang"] == "zh":
-                tmp["lang"] = "yue"
-            langlist.append(tmp["lang"])
-            textlist.append(tmp["text"])
-    else:
-        for tmp in LangSegmenter.getTexts(text):
-            if langlist:
-                if (tmp["lang"] == "en" and langlist[-1] == "en") or (
-                    tmp["lang"] != "en" and langlist[-1] != "en"
-                ):
-                    textlist[-1] += tmp["text"]
-                    continue
-            if tmp["lang"] == "en":
-                langlist.append(tmp["lang"])
-            else:
-                # 因无法区别中日韩文汉字,以用户输入为准
-                langlist.append(language)
-            textlist.append(tmp["text"])
+def get_phones_and_bert(text: str, language: str, final=False):
+    textlist, langlist = segment(text, language)
     print(textlist)
     print(langlist)
     phones_list = []
@@ -301,9 +230,9 @@ def get_tts_wav(
             wav16k = torch.from_numpy(wav16k)
             wav16k = wav16k.to(dtype=dtype, device=device)
             wav16k = torch.cat([wav16k, zero_wav_torch])
-            ssl_content = ssl_model.model(wav16k.unsqueeze(0))[
-                "last_hidden_state"
-            ].transpose(1, 2)  # .float()
+            ssl_content = ssl_model(wav16k.unsqueeze(0))["last_hidden_state"].transpose(
+                1, 2
+            )  # .float()
             codes = vq_model.extract_latent(ssl_content)
             prompt_semantic = codes[0, 0]
             prompt = prompt_semantic.unsqueeze(0).to(device)
@@ -312,7 +241,6 @@ def get_tts_wav(
     t.append(t1 - t0)
     texts = preprocess_text(text, how_to_cut)
     audio_opt = []
-    ###s2v3暂不支持ref_free
     if not ref_free:
         phones1, bert1, norm_text1 = get_phones_and_bert(prompt_text, prompt_language)
 

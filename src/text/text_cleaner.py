@@ -3,6 +3,7 @@ from . import chinese2
 from . import english
 from . import japanese
 from . import korean
+from ..symbols import symbols
 
 language_module_map = {
     "zh": chinese2,
@@ -21,8 +22,6 @@ def load_language_module(language):
         raise NotImplementedError(f"{language} g2p not found!")
     return text_normalize, g2p
 
-
-from ..symbols import symbols
 
 _symbol_to_id = {s: i for i, s in enumerate(symbols)}
 
@@ -89,7 +88,7 @@ def clean_special(text, special_s, target_symbol, text_normalize, g2p):
     return new_ph, phones[1], norm_text
 
 
-def clean_text_inf(text, language):
+def clean_text_inf(text: str, language: str):
     phones, word2ph, norm_text = clean_text(text, language)
     phones = cleaned_text_to_sequence(phones)
     return phones, word2ph, norm_text

@@ -786,3 +786,5 @@ symbols = sorted(set(symbols))
 symbols += ["[", "]"]  ##日文新增上升下降调型
 symbols += sorted(list(ko_symbols))
 symbols += sorted(list(yue_symbols))
+
+__all__ = ["symbols", "punctuation"]

@@ -7,7 +7,10 @@ import ToJyutping
 from ..symbols import punctuation
 from .zh_normalization.text_normlization import TextNormalizer
 
-normalizer = lambda x: cn2an.transform(x, "an2cn")
+
+def normalizer(x):
+    return cn2an.transform(x, "an2cn")
+
 
 INITIALS = [
     "aa",

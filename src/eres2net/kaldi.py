@@ -653,7 +653,7 @@ def fbank(
         vtln_low (float, optional): Low inflection point in piecewise linear VTLN warping function (Default: ``100.0``)
         vtln_warp (float, optional): Vtln warp factor (only applicable if vtln_map not specified) (Default: ``1.0``)
         window_type (str, optional): Type of window ('hamming'|'hanning'|'povey'|'rectangular'|'blackman')
-         (Default: ``'povey'``)
+            (Default: ``'povey'``)
 
     Returns:
         Tensor: A fbank identical to what Kaldi would output. The shape is (m, ``num_mel_bins + use_energy``)

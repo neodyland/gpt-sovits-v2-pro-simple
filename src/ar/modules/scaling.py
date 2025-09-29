@@ -14,8 +14,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 import random
-from typing import Optional
-from typing import Tuple
+from typing import Optional, Tuple
 
 import torch
 import torch.nn as nn
@@ -41,7 +40,6 @@ class DoubleSwishFunction(torch.autograd.Function):
     @staticmethod
     def forward(ctx, x: Tensor) -> Tensor:
         requires_grad = x.requires_grad
-        x_dtype = x.dtype
         if x.dtype == torch.float16:
             x = x.to(torch.float32)
 
@@ -286,7 +284,6 @@ class ActivationBalancer(torch.nn.Module):
         prob = max(self.min_prob, 0.5 ** (1 + (count / 4000.0)))
 
         if random.random() < prob:
-            sign_gain_factor = 0.5
             if self.min_positive != 0.0 or self.max_positive != 1.0:
                 sign_factor = _compute_sign_factor(
                     x,

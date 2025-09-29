@@ -21,18 +21,6 @@ from .utils import (
 from .modules.embedding import SinePositionalEmbedding, TokenEmbedding
 from .modules.transformer import LayerNorm, TransformerEncoder, TransformerEncoderLayer
 
-default_config = {
-    "embedding_dim": 512,
-    "hidden_dim": 512,
-    "num_head": 8,
-    "num_layers": 12,
-    "num_codebook": 8,
-    "p_dropout": 0.0,
-    "vocab_size": 1024 + 1,
-    "phoneme_vocab_size": 512,
-    "EOS": 1024,
-}
-
 
 # @torch.jit.script ## 使用的话首次推理会非常慢，而且推理速度不稳定
 # Efficient implementation equivalent to the following:
@@ -630,11 +618,9 @@ class Text2SemanticDecoder(nn.Module):
         max_len = kwargs.get("max_len", x_lens.max())
         x_list = []
         for x_item, bert_item in zip(x, bert_feature):
-            # max_len = max(max_len, x_item.shape[0], bert_item.shape[1])
             x_item = self.ar_text_embedding(x_item.unsqueeze(0))
             x_item = x_item + self.bert_proj(bert_item.transpose(0, 1).unsqueeze(0))
             x_item = self.ar_text_position(x_item).squeeze(0)
-            # x_item = F.pad(x_item,(0,0,0,max_len-x_item.shape[0]),value=0) if x_item.shape[0]<max_len else x_item  ### padding right
             x_item = (
                 F.pad(x_item, (0, 0, max_len - x_item.shape[0], 0), value=0)
                 if x_item.shape[0] < max_len

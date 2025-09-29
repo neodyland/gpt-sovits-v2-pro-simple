@@ -111,7 +111,7 @@ def _expand_measurement(m):
     num = int(m.group(1).replace(sign, "").replace(".", ""))
     decimal_part = m.group(2)
     # 上面判断的漏洞，比如 0.1 的情况，在这里排除了
-    if decimal_part == None and num == 1:
+    if decimal_part is None and num == 1:
         ptr = 0
     return m.group(1).replace(sign, " " + measurement_map[sign][ptr])
 

@@ -1,4 +1,3 @@
-import os
 import re
 
 import cn2an
@@ -9,14 +8,16 @@ from ..symbols import punctuation
 from .tone_sandhi import ToneSandhi
 from .zh_normalization.text_normlization import TextNormalizer
 
-normalizer = lambda x: cn2an.transform(x, "an2cn")
+
+def normalizer(x):
+    return cn2an.transform(x, "an2cn")
+
 
 pinyin_to_symbol_map = {
     line.split("\t")[0]: line.strip().split("\t")[1]
     for line in open("./data/dict/opencpop-strict.txt").readlines()
 }
 
-import jieba_fast
 import jieba_fast.posseg as psg
 
 # is_g2pw_str = os.environ.get("is_g2pw", "True")##默认开启
@@ -24,7 +25,7 @@ import jieba_fast.posseg as psg
 is_g2pw = True  # True if is_g2pw_str.lower() == 'true' else False
 if is_g2pw:
     # print("当前使用g2pw进行拼音推理")
-    from .g2pw import G2PWPinyin, correct_pronunciation
+    from .g2pw.g2pw import G2PWPinyin, correct_pronunciation
 
     g2pw = G2PWPinyin(
         model_dir="./data/g2pw_model",

@@ -360,7 +360,7 @@ class PosteriorEncoder(nn.Module):
         self.proj = nn.Conv1d(hidden_channels, out_channels * 2, 1)
 
     def forward(self, x, x_lengths, g=None):
-        if g != None:
+        if g is not None:
             g = g.detach()
         x_mask = torch.unsqueeze(sequence_mask(x_lengths, x.size(2)), 1).to(x.dtype)
         x = self.pre(x) * x_mask
@@ -402,7 +402,7 @@ class Encoder(nn.Module):
         self.proj = nn.Conv1d(hidden_channels, out_channels, 1)
 
     def forward(self, x, x_lengths, g=None):
-        if g != None:
+        if g is not None:
             g = g.detach()
         x_mask = torch.unsqueeze(sequence_mask(x_lengths, x.size(2)), 1).to(x.dtype)
         x = self.pre(x) * x_mask
@@ -1359,7 +1359,7 @@ class SynthesizerTrnV3(nn.Module):
     def decode_encp(self, codes, text, refer, ge=None, speed=1):
         # print(2333333,refer.shape)
         # ge=None
-        if ge == None:
+        if ge is None:
             refer_lengths = torch.LongTensor([refer.size(2)]).to(refer.device)
             refer_mask = torch.unsqueeze(
                 sequence_mask(refer_lengths, refer.size(2)), 1
@@ -1576,7 +1576,7 @@ class SynthesizerTrnV3b(nn.Module):
     def decode_encp(self, codes, text, refer, ge=None):
         # print(2333333,refer.shape)
         # ge=None
-        if ge == None:
+        if ge is None:
             refer_lengths = torch.LongTensor([refer.size(2)]).to(refer.device)
             refer_mask = torch.unsqueeze(
                 sequence_mask(refer_lengths, refer.size(2)), 1

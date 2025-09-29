@@ -9,9 +9,9 @@ from ..symbols import symbols, punctuation
 from builtins import str as unicode
 from .en_normalization import normalize
 from nltk.tokenize import TweetTokenizer
+from nltk import pos_tag
 
 word_tokenize = TweetTokenizer().tokenize
-from nltk import pos_tag
 
 CMU_DICT_PATH = "./data/dict/cmudict.rep"
 CMU_DICT_FAST_PATH = "./data/dict/cmudict-fast.rep"

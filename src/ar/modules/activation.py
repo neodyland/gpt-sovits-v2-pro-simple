@@ -30,7 +30,7 @@ class MultiheadAttention(Module):
     conditions are met:
 
     - self attention is being computed (i.e., ``query``, ``key``, and ``value`` are the same tensor. This
-      restriction will be loosened in the future.)
+        restriction will be loosened in the future.)
     - Either autograd is disabled (using ``torch.inference_mode`` or ``torch.no_grad``) or no tensor argument ``requires_grad``
     - training is disabled (using ``.eval()``)
     - dropout is 0
@@ -40,7 +40,7 @@ class MultiheadAttention(Module):
     - ``kdim`` and ``vdim`` are equal to ``embed_dim``
     - at most one of ``key_padding_mask`` or ``attn_mask`` is passed
     - if a `NestedTensor <https://pytorch.org/docs/stable/nested.html>`_ is passed, neither ``key_padding_mask``
-      nor ``attn_mask`` is passed
+        nor ``attn_mask`` is passed
 
     If the optimized implementation is in use, a
     `NestedTensor <https://pytorch.org/docs/stable/nested.html>`_ can be passed for
@@ -252,14 +252,14 @@ class MultiheadAttention(Module):
 
         Outputs:
             - **attn_output** - Attention outputs of shape :math:`(L, E)` when input is unbatched,
-              :math:`(L, N, E)` when ``batch_first=False`` or :math:`(N, L, E)` when ``batch_first=True``,
-              where :math:`L` is the target sequence length, :math:`N` is the batch size, and :math:`E` is the
-              embedding dimension ``embed_dim``.
+                :math:`(L, N, E)` when ``batch_first=False`` or :math:`(N, L, E)` when ``batch_first=True``,
+                where :math:`L` is the target sequence length, :math:`N` is the batch size, and :math:`E` is the
+                embedding dimension ``embed_dim``.
             - **attn_output_weights** - Only returned when ``need_weights=True``. If ``average_attn_weights=True``,
-              returns attention weights averaged across heads of shape :math:`(L, S)` when input is unbatched or
-              :math:`(N, L, S)`, where :math:`N` is the batch size, :math:`L` is the target sequence length, and
-              :math:`S` is the source sequence length. If ``average_attn_weights=False``, returns attention weights per
-              head of shape :math:`(\text{num\_heads}, L, S)` when input is unbatched or :math:`(N, \text{num\_heads}, L, S)`.
+                returns attention weights averaged across heads of shape :math:`(L, S)` when input is unbatched or
+                :math:`(N, L, S)`, where :math:`N` is the batch size, :math:`L` is the target sequence length, and
+                :math:`S` is the source sequence length. If ``average_attn_weights=False``, returns attention weights per
+                head of shape :math:`(\text{num\_heads}, L, S)` when input is unbatched or :math:`(N, \text{num\_heads}, L, S)`.
 
             .. note::
                 `batch_first` argument is ignored for unbatched inputs.

@@ -1,6 +1,6 @@
 # modified from https://github.com/yangdongchao/SoundStorm/blob/master/soundstorm/s1/AR/models/utils.py
 # reference: https://github.com/lifeiteng/vall-e
-from typing import Tuple
+from typing import Tuple, Optional
 
 import torch
 import torch.nn.functional as F
@@ -16,14 +16,14 @@ def sequence_mask(length, max_length=None):
 def make_pad_mask(lengths: torch.Tensor, max_len: int = 0) -> torch.Tensor:
     """
     Args:
-      lengths:
-        A 1-D tensor containing sentence lengths.
-      max_len:
-        The length of masks.
+        lengths:
+            A 1-D tensor containing sentence lengths.
+        max_len:
+            The length of masks.
     Returns:
-      Return a 2-D bool tensor, where masked positions
-      are filled with `True` and non-masked positions are
-      filled with `False`.
+        Return a 2-D bool tensor, where masked positions
+        are filled with `True` and non-masked positions are
+        filled with `False`.
 
     #>>> lengths = torch.tensor([1, 3, 2, 5])
     #>>> make_pad_mask(lengths)
@@ -134,9 +134,6 @@ def topk_sampling(logits, top_k=10, top_p=1.0, temperature=1.0):
     # Sample
     token = torch.multinomial(F.softmax(logits, dim=-1), num_samples=1)
     return token
-
-
-from typing import Optional
 
 
 def multinomial_sample_one_no_sync(
@@ -262,7 +259,6 @@ def make_reject_y(y_o, y_lens):
         range_idx, _ = torch.randint(0, len(y), size=(2,)).sort()
         pre = y[: range_idx[0]]
         shf = y[range_idx[1] :]
-        range_text = y[range_idx[0] : range_idx[1]]
         new_y = torch.cat([pre, shf])
         return new_y
 

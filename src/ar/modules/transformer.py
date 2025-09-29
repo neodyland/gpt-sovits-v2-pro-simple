@@ -2,12 +2,7 @@
 import copy
 import numbers
 from functools import partial
-from typing import Any
-from typing import Callable
-from typing import List
-from typing import Optional
-from typing import Tuple
-from typing import Union
+from typing import Any, Callable, List, Optional, Tuple, Union
 
 import torch
 from .activation import MultiheadAttention

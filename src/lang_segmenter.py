@@ -236,6 +236,61 @@ class LangSegmenter:
         return lang_list
 
 
+def segment(
+    text: str,
+    language: str,
+):
+    text = re.sub(r" {2,}", " ", text)
+    textlist = []
+    langlist = []
+    if language == "all_zh":
+        for tmp in LangSegmenter.getTexts(text, "zh"):
+            langlist.append(tmp["lang"])
+            textlist.append(tmp["text"])
+    elif language == "all_yue":
+        for tmp in LangSegmenter.getTexts(text, "zh"):
+            if tmp["lang"] == "zh":
+                tmp["lang"] = "yue"
+            langlist.append(tmp["lang"])
+            textlist.append(tmp["text"])
+    elif language == "all_ja":
+        for tmp in LangSegmenter.getTexts(text, "ja"):
+            langlist.append(tmp["lang"])
+            textlist.append(tmp["text"])
+    elif language == "all_ko":
+        for tmp in LangSegmenter.getTexts(text, "ko"):
+            langlist.append(tmp["lang"])
+            textlist.append(tmp["text"])
+    elif language == "en":
+        langlist.append("en")
+        textlist.append(text)
+    elif language == "auto":
+        for tmp in LangSegmenter.getTexts(text):
+            langlist.append(tmp["lang"])
+            textlist.append(tmp["text"])
+    elif language == "auto_yue":
+        for tmp in LangSegmenter.getTexts(text):
+            if tmp["lang"] == "zh":
+                tmp["lang"] = "yue"
+            langlist.append(tmp["lang"])
+            textlist.append(tmp["text"])
+    else:
+        for tmp in LangSegmenter.getTexts(text):
+            if langlist:
+                if (tmp["lang"] == "en" and langlist[-1] == "en") or (
+                    tmp["lang"] != "en" and langlist[-1] != "en"
+                ):
+                    textlist[-1] += tmp["text"]
+                    continue
+            if tmp["lang"] == "en":
+                langlist.append(tmp["lang"])
+            else:
+                # 因无法区别中日韩文汉字,以用户输入为准
+                langlist.append(language)
+            textlist.append(tmp["text"])
+    return textlist, langlist
+
+
 if __name__ == "__main__":
     text = "MyGO?,你也喜欢まいご吗？"
     print(LangSegmenter.getTexts(text))

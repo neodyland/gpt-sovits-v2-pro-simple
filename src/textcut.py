@@ -39,7 +39,6 @@ def split(todo_text: str):
 
 
 def cut1(inp: str):
-    inp = inp.strip("\n")
     inps = split(inp)
     split_idx = list(range(0, len(inps), 4))
     split_idx[-1] = None
@@ -54,7 +53,6 @@ def cut1(inp: str):
 
 
 def cut2(inp: str):
-    inp = inp.strip("\n")
     inps = split(inp)
     if len(inps) < 2:
         return inp
@@ -79,22 +77,22 @@ def cut2(inp: str):
 
 
 def cut3(inp: str):
-    inp = inp.strip("\n")
     opts = ["%s" % item for item in inp.strip("。").split("。")]
     opts = [item for item in opts if not set(item).issubset(punctuation)]
     return "\n".join(opts)
 
 
+RE_CUT4 = re.compile(r"(?<!\d)\.(?!\d)")
+
+
 def cut4(inp: str):
-    inp = inp.strip("\n")
-    opts = re.split(r"(?<!\d)\.(?!\d)", inp.strip("."))
+    opts = RE_CUT4.split(inp.strip("."))
     opts = [item for item in opts if not set(item).issubset(punctuation)]
     return "\n".join(opts)
 
 
 # contributed by https://github.com/AI-Hobbyist/GPT-SoVITS/blob/main/GPT_SoVITS/inference_webui.py
 def cut5(inp: str):
-    inp = inp.strip("\n")
     punds = {",", ".", ";", "?", "!", "、", "，", "。", "？", "！", ";", "：", "…"}
     mergeitems = []
     items = []
@@ -131,44 +129,48 @@ type Strategy = Literal[
     "punctuation",
 ]
 
+cu_map = {
+    "four_sentences": cut1,
+    "fifty_characters": cut2,
+    "chinese_period": cut3,
+    "english_period": cut4,
+    "punctuation": cut5,
+}
+
 
 def preprocess_text(text: str, strategy: Strategy) -> list[str]:
     print("Selected input text: ", text)
     text = text.strip("\n")
-    if strategy == "four_sentences":
-        text = cut1(text)
-    elif strategy == "fifty_characters":
-        text = cut2(text)
-    elif strategy == "chinese_period":
-        text = cut3(text)
-    elif strategy == "english_period":
-        text = cut4(text)
-    elif strategy == "punctuation":
-        text = cut5(text)
+    if strategy in cu_map:
+        text = cu_map[strategy](text)
     while "\n\n" in text:
         text = text.replace("\n\n", "\n")
     print("Actual input text (each line):", text)
-    texts = text.split("\n")
-    _text = []
-    if all(text in [None, " ", "\n", ""] for text in texts):
+    _pre_texts = text.split("\n")
+    _res_texts = []
+    if all(text in [None, " ", "\n", ""] for text in _pre_texts):
         raise ValueError("Invalid input text")
-    for text in texts:
+    for text in _pre_texts:
         if text in [None, " ", ""]:
             pass
         else:
-            _text.append(text)
-    if (len(_text)) < 2:
-        return _text
-    result = []
+            _res_texts.append(text)
+    if (len(_res_texts)) < 2:
+        return _res_texts
+    _pre_texts = _res_texts
+    _res_texts = []
     text = ""
-    for ele in _text:
+    for ele in _pre_texts:
         text += ele
         if len(text) >= 5:
-            result.append(text)
+            _res_texts.append(text)
             text = ""
     if len(text) > 0:
-        if len(result) == 0:
-            result.append(text)
+        if len(_res_texts) == 0:
+            _res_texts.append(text)
         else:
-            result[len(result) - 1] += text
-    return result
+            _res_texts[len(_res_texts) - 1] += text
+    return _res_texts
+
+
+__all__ = ["preprocess_text", "Strategy"]
