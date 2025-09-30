@@ -168,10 +168,6 @@ class TransformerEncoderLayer(nn.Module):
         norm_first: bool = False,
         device=None,
         dtype=None,
-        linear1_self_attention_cls: nn.Module = nn.Linear,
-        linear2_self_attention_cls: nn.Module = nn.Linear,
-        linear1_feedforward_cls: nn.Module = nn.Linear,
-        linear2_feedforward_cls: nn.Module = nn.Linear,
         layer_norm_eps: float = 1e-5,
         adaptive_layer_norm=False,
     ) -> None:
@@ -185,19 +181,13 @@ class TransformerEncoderLayer(nn.Module):
             nhead,
             dropout=dropout,
             batch_first=batch_first,
-            linear1_cls=linear1_self_attention_cls,
-            linear2_cls=linear2_self_attention_cls,
             **factory_kwargs,
         )
 
         # Implementation of Feedforward model
-        self.linear1 = linear1_feedforward_cls(
-            d_model, dim_feedforward, **factory_kwargs
-        )
+        self.linear1 = nn.Linear(d_model, dim_feedforward, **factory_kwargs)
         self.dropout = nn.Dropout(dropout)
-        self.linear2 = linear2_feedforward_cls(
-            dim_feedforward, d_model, **factory_kwargs
-        )
+        self.linear2 = nn.Linear(dim_feedforward, d_model, **factory_kwargs)
 
         self.norm_first = norm_first
         self.dropout1 = nn.Dropout(dropout)
