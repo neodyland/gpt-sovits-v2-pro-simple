@@ -93,9 +93,6 @@ def load(type: Literal["v2pro", "v2proplus"]):
     hop_length = hps["data"]["hop_length"]
     vq_model = (
         SynthesizerTrn(
-            filter_length // 2 + 1,
-            hps["train"]["segment_size"] // hop_length,
-            n_speakers=hps["data"]["n_speakers"],
             **hps["model"],
         )
         .to(dtype=dtype, device=device)

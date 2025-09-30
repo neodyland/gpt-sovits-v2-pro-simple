@@ -7,7 +7,6 @@ from torch.nn import Conv1d
 from torch.nn.utils import weight_norm, remove_weight_norm
 
 from .commons import init_weights, get_padding, fused_add_tanh_sigmoid_multiply
-import torch.distributions as D
 
 
 LRELU_SLOPE = 0.1
@@ -409,6 +408,29 @@ class ConvNorm(nn.Module):
         return out
 
 
+class ScaledDotProductAttention(nn.Module):
+    """Scaled Dot-Product Attention"""
+
+    def __init__(self, temperature, dropout):
+        super().__init__()
+        self.temperature = temperature
+        self.softmax = nn.Softmax(dim=2)
+        self.dropout = nn.Dropout(dropout)
+
+    def forward(self, q, k, v, mask=None):
+        attn = torch.bmm(q, k.transpose(1, 2))
+        attn = attn / self.temperature
+
+        if mask is not None:
+            attn = attn.masked_fill(mask, -np.inf)
+
+        attn = self.softmax(attn)
+        p_attn = self.dropout(attn)
+
+        output = torch.bmm(p_attn, v)
+        return output, attn
+
+
 class MultiHeadAttention(nn.Module):
     """Multi-Head Attention module"""
 
@@ -463,29 +485,6 @@ class MultiHeadAttention(nn.Module):
         output = self.fc(output)
 
         output = self.dropout(output) + residual
-        return output, attn
-
-
-class ScaledDotProductAttention(nn.Module):
-    """Scaled Dot-Product Attention"""
-
-    def __init__(self, temperature, dropout):
-        super().__init__()
-        self.temperature = temperature
-        self.softmax = nn.Softmax(dim=2)
-        self.dropout = nn.Dropout(dropout)
-
-    def forward(self, q, k, v, mask=None):
-        attn = torch.bmm(q, k.transpose(1, 2))
-        attn = attn / self.temperature
-
-        if mask is not None:
-            attn = attn.masked_fill(mask, -np.inf)
-
-        attn = self.softmax(attn)
-        p_attn = self.dropout(attn)
-
-        output = torch.bmm(p_attn, v)
         return output, attn
 
 

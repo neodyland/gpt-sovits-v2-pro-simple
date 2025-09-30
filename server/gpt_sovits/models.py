@@ -7,7 +7,6 @@ from .module.mrte_model import MRTE
 from .module.quantize import ResidualVectorQuantizer
 from .module.modules import (
     Flip,
-    WN,
     ResBlock1,
     ResBlock2,
     ResidualCouplingLayer,
@@ -17,14 +16,10 @@ from .module.modules import (
 from .module.commons import (
     init_weights,
     sequence_mask,
-    rand_slice_segments,
 )
-from torch.nn import Conv1d, ConvTranspose1d
 from torch.nn.utils import weight_norm, remove_weight_norm
 
 from ..symbols import symbols
-from torch.cuda.amp import autocast
-import contextlib
 
 
 class TextEncoder(nn.Module):
@@ -167,48 +162,6 @@ class ResidualCouplingBlock(nn.Module):
         return x
 
 
-class PosteriorEncoder(nn.Module):
-    def __init__(
-        self,
-        in_channels,
-        out_channels,
-        hidden_channels,
-        kernel_size,
-        dilation_rate,
-        n_layers,
-        gin_channels=0,
-    ):
-        super().__init__()
-        self.in_channels = in_channels
-        self.out_channels = out_channels
-        self.hidden_channels = hidden_channels
-        self.kernel_size = kernel_size
-        self.dilation_rate = dilation_rate
-        self.n_layers = n_layers
-        self.gin_channels = gin_channels
-
-        self.pre = nn.Conv1d(in_channels, hidden_channels, 1)
-        self.enc = WN(
-            hidden_channels,
-            kernel_size,
-            dilation_rate,
-            n_layers,
-            gin_channels=gin_channels,
-        )
-        self.proj = nn.Conv1d(hidden_channels, out_channels * 2, 1)
-
-    def forward(self, x, x_lengths, g=None):
-        if g is not None:
-            g = g.detach()
-        x_mask = torch.unsqueeze(sequence_mask(x_lengths, x.size(2)), 1).to(x.dtype)
-        x = self.pre(x) * x_mask
-        x = self.enc(x, x_mask, g=g)
-        stats = self.proj(x) * x_mask
-        m, logs = torch.split(stats, self.out_channels, dim=1)
-        z = (m + torch.randn_like(m) * torch.exp(logs)) * x_mask
-        return z, m, logs, x_mask
-
-
 class Generator(torch.nn.Module):
     def __init__(
         self,
@@ -225,7 +178,7 @@ class Generator(torch.nn.Module):
         super(Generator, self).__init__()
         self.num_kernels = len(resblock_kernel_sizes)
         self.num_upsamples = len(upsample_rates)
-        self.conv_pre = Conv1d(
+        self.conv_pre = nn.Conv1d(
             initial_channel, upsample_initial_channel, 7, 1, padding=3
         )
         resblock = ResBlock1 if resblock == "1" else ResBlock2
@@ -234,7 +187,7 @@ class Generator(torch.nn.Module):
         for i, (u, k) in enumerate(zip(upsample_rates, upsample_kernel_sizes)):
             self.ups.append(
                 weight_norm(
-                    ConvTranspose1d(
+                    nn.ConvTranspose1d(
                         upsample_initial_channel // (2**i),
                         upsample_initial_channel // (2 ** (i + 1)),
                         k,
@@ -252,7 +205,7 @@ class Generator(torch.nn.Module):
             ):
                 self.resblocks.append(resblock(ch, k, d))
 
-        self.conv_post = Conv1d(ch, 1, 7, 1, padding=3, bias=is_bias)
+        self.conv_post = nn.Conv1d(ch, 1, 7, 1, padding=3, bias=is_bias)
         self.ups.apply(init_weights)
 
         if gin_channels != 0:
@@ -294,8 +247,6 @@ class SynthesizerTrn(nn.Module):
 
     def __init__(
         self,
-        spec_channels,
-        segment_size,
         inter_channels,
         hidden_channels,
         filter_channels,
@@ -309,32 +260,10 @@ class SynthesizerTrn(nn.Module):
         upsample_rates,
         upsample_initial_channel,
         upsample_kernel_sizes,
-        n_speakers=0,
         gin_channels=0,
-        use_sdp=True,
-        freeze_quantizer=None,
-        **kwargs,
     ):
         super().__init__()
-        self.spec_channels = spec_channels
-        self.inter_channels = inter_channels
-        self.hidden_channels = hidden_channels
-        self.filter_channels = filter_channels
-        self.n_heads = n_heads
-        self.n_layers = n_layers
-        self.kernel_size = kernel_size
-        self.p_dropout = p_dropout
-        self.resblock = resblock
-        self.resblock_kernel_sizes = resblock_kernel_sizes
-        self.resblock_dilation_sizes = resblock_dilation_sizes
-        self.upsample_rates = upsample_rates
-        self.upsample_initial_channel = upsample_initial_channel
-        self.upsample_kernel_sizes = upsample_kernel_sizes
-        self.segment_size = segment_size
-        self.n_speakers = n_speakers
-        self.gin_channels = gin_channels
 
-        self.use_sdp = use_sdp
         self.enc_p = TextEncoder(
             inter_channels,
             hidden_channels,
@@ -354,15 +283,6 @@ class SynthesizerTrn(nn.Module):
             upsample_kernel_sizes,
             gin_channels=gin_channels,
         )
-        self.enc_q = PosteriorEncoder(
-            spec_channels,
-            inter_channels,
-            hidden_channels,
-            5,
-            1,
-            16,
-            gin_channels=gin_channels,
-        )
         self.flow = ResidualCouplingBlock(
             inter_channels, hidden_channels, 5, 1, 4, gin_channels=gin_channels
         )
@@ -374,76 +294,10 @@ class SynthesizerTrn(nn.Module):
         self.ssl_proj = nn.Conv1d(ssl_dim, ssl_dim, 2, stride=2)
 
         self.quantizer = ResidualVectorQuantizer(dimension=ssl_dim, n_q=1, bins=1024)
-        self.freeze_quantizer = freeze_quantizer
 
-        self.is_v2pro = True
-        if self.is_v2pro:
-            self.sv_emb = nn.Linear(20480, gin_channels)
-            self.ge_to512 = nn.Linear(gin_channels, 512)
-            self.prelu = nn.PReLU(num_parameters=gin_channels)
-
-    def forward(self, ssl, y, y_lengths, text, text_lengths, sv_emb=None):
-        y_mask = torch.unsqueeze(sequence_mask(y_lengths, y.size(2)), 1).to(y.dtype)
-        ge = self.ref_enc(y[:, :704] * y_mask, y_mask)
-        if self.is_v2pro:
-            sv_emb = self.sv_emb(sv_emb)  # B*20480->B*512
-            ge += sv_emb.unsqueeze(-1)
-            ge = self.prelu(ge)
-            ge512 = self.ge_to512(ge.transpose(2, 1)).transpose(2, 1)
-        with autocast(enabled=False):
-            maybe_no_grad = (
-                torch.no_grad() if self.freeze_quantizer else contextlib.nullcontext()
-            )
-            with maybe_no_grad:
-                if self.freeze_quantizer:
-                    self.ssl_proj.eval()
-                    self.quantizer.eval()
-            ssl = self.ssl_proj(ssl)
-            quantized, codes, commit_loss, quantized_list = self.quantizer(
-                ssl, layers=[0]
-            )
-
-        quantized = F.interpolate(
-            quantized, size=int(quantized.shape[-1] * 2), mode="nearest"
-        )
-
-        x, m_p, logs_p, y_mask = self.enc_p(
-            quantized, y_lengths, text, text_lengths, ge512 if self.is_v2pro else ge
-        )
-        z, m_q, logs_q, y_mask = self.enc_q(y, y_lengths, g=ge)
-        z_p = self.flow(z, y_mask, g=ge)
-
-        z_slice, ids_slice = rand_slice_segments(z, y_lengths, self.segment_size)
-        o = self.dec(z_slice, g=ge)
-        return (
-            o,
-            commit_loss,
-            ids_slice,
-            y_mask,
-            y_mask,
-            (z, z_p, m_p, logs_p, m_q, logs_q),
-            quantized,
-        )
-
-    def infer(self, ssl, y, y_lengths, text, text_lengths, test=None, noise_scale=0.5):
-        y_mask = torch.unsqueeze(sequence_mask(y_lengths, y.size(2)), 1).to(y.dtype)
-        ge = self.ref_enc(y[:, :704] * y_mask, y_mask)
-
-        ssl = self.ssl_proj(ssl)
-        quantized, codes, commit_loss, _ = self.quantizer(ssl, layers=[0])
-        quantized = F.interpolate(
-            quantized, size=int(quantized.shape[-1] * 2), mode="nearest"
-        )
-
-        x, m_p, logs_p, y_mask = self.enc_p(
-            quantized, y_lengths, text, text_lengths, ge, test=test
-        )
-        z_p = m_p + torch.randn_like(m_p) * torch.exp(logs_p) * noise_scale
-
-        z = self.flow(z_p, y_mask, g=ge, reverse=True)
-
-        o = self.dec((z * y_mask)[:, :, :], g=ge)
-        return o, y_mask, (z, z_p, m_p, logs_p)
+        self.sv_emb = nn.Linear(20480, gin_channels)
+        self.ge_to512 = nn.Linear(gin_channels, 512)
+        self.prelu = nn.PReLU(num_parameters=gin_channels)
 
     @torch.no_grad()
     def decode(self, codes, text, refer, noise_scale=0.5, speed=1, sv_emb=None):
@@ -455,16 +309,15 @@ class SynthesizerTrn(nn.Module):
                     sequence_mask(refer_lengths, refer.size(2)), 1
                 ).to(refer.dtype)
                 ge = self.ref_enc(refer[:, :704] * refer_mask, refer_mask)
-                if self.is_v2pro:
-                    sv_emb = self.sv_emb(sv_emb)  # B*20480->B*512
-                    ge += sv_emb.unsqueeze(-1)
-                    ge = self.prelu(ge)
+                sv_emb = self.sv_emb(sv_emb)  # B*20480->B*512
+                ge += sv_emb.unsqueeze(-1)
+                ge = self.prelu(ge)
             return ge
 
         if type(refer) == list:
             ges = []
             for idx, _refer in enumerate(refer):
-                ge = get_ge(_refer, sv_emb[idx] if self.is_v2pro else None)
+                ge = get_ge(_refer, sv_emb[idx])
                 ges.append(ge)
             ge = torch.stack(ges, 0).mean(0)
         else:
@@ -482,7 +335,7 @@ class SynthesizerTrn(nn.Module):
             y_lengths,
             text,
             text_lengths,
-            self.ge_to512(ge.transpose(2, 1)).transpose(2, 1) if self.is_v2pro else ge,
+            self.ge_to512(ge.transpose(2, 1)).transpose(2, 1),
             speed,
         )
         z_p = m_p + torch.randn_like(m_p) * torch.exp(logs_p) * noise_scale

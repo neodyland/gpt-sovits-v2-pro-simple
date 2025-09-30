@@ -57,10 +57,10 @@ class Encoder(nn.Module):
             )
             self.norm_layers_2.append(LayerNorm(hidden_channels))
         if isflow:
-            cond_layer = torch.nn.Conv1d(
+            cond_layer = nn.Conv1d(
                 kwargs["gin_channels"], 2 * hidden_channels * n_layers, 1
             )
-            self.cond_pre = torch.nn.Conv1d(hidden_channels, 2 * hidden_channels, 1)
+            self.cond_pre = nn.Conv1d(hidden_channels, 2 * hidden_channels, 1)
             self.cond_layer = weight_norm_modules(cond_layer, name="weight")
             self.gin_channels = kwargs["gin_channels"]
 
@@ -275,9 +275,9 @@ class MultiHeadAttention(nn.Module):
     def _attention_bias_proximal(self, length):
         """Bias for self-attention to encourage attention to close positions.
         Args:
-          length: an integer scalar.
+            length: an integer scalar.
         Returns:
-          a Tensor with shape [1, 1, length, length]
+            a Tensor with shape [1, 1, length, length]
         """
         r = torch.arange(length, dtype=torch.float32)
         diff = torch.unsqueeze(r, 0) - torch.unsqueeze(r, 1)

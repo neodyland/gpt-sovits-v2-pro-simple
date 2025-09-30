@@ -360,21 +360,6 @@ class ResidualVectorQuantization(nn.Module):
         out_losses, out_indices = map(torch.stack, (all_losses, all_indices))
         return quantized_out, out_indices, out_losses, out_quantized
 
-    def encode(
-        self, x: torch.Tensor, n_q: tp.Optional[int] = None, st: tp.Optional[int] = None
-    ) -> torch.Tensor:
-        residual = x
-        all_indices = []
-        n_q = n_q or len(self.layers)
-        st = st or 0
-        for layer in self.layers[st:n_q]:
-            indices = layer.encode(residual)
-            quantized = layer.decode(indices)
-            residual = residual - quantized
-            all_indices.append(indices)
-        out_indices = torch.stack(all_indices)
-        return out_indices
-
     def decode(self, q_indices: torch.Tensor, st: int = 0) -> torch.Tensor:
         quantized_out = torch.tensor(0.0, device=q_indices.device)
         for i, indices in enumerate(q_indices):
