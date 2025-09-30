@@ -1,12 +1,10 @@
 # modified from https://github.com/lifeiteng/vall-e/blob/main/valle/modules/transformer.py
 import copy
 import numbers
-from functools import partial
-from typing import Any, Callable, List, Optional, Tuple, Union
+from typing import Any, List, Optional, Tuple, Union
 
 import torch
 from .activation import MultiheadAttention
-from .scaling import BalancedDoubleSwish
 from torch import nn
 from torch import Tensor
 from torch.nn import functional as F
@@ -77,24 +75,6 @@ class LayerNorm(nn.Module):
         return "{normalized_shape}, eps={eps}, elementwise_affine={elementwise_affine}".format(
             **self.__dict__
         )
-
-
-class IdentityNorm(nn.Module):
-    def __init__(
-        self,
-        d_model: int,
-        eps: float = 1e-5,
-        device=None,
-        dtype=None,
-    ) -> None:
-        super(IdentityNorm, self).__init__()
-
-    def forward(self, input: Tensor, embedding: Any = None) -> Tensor:
-        if isinstance(input, tuple):
-            return input
-
-        assert embedding is None
-        return input
 
 
 class TransformerEncoder(nn.Module):
@@ -184,7 +164,6 @@ class TransformerEncoderLayer(nn.Module):
         nhead: int,
         dim_feedforward: int = 2048,
         dropout: float = 0.1,
-        activation: Union[str, Callable[[Tensor], Tensor]] = F.relu,
         batch_first: bool = False,
         norm_first: bool = False,
         device=None,
@@ -193,7 +172,6 @@ class TransformerEncoderLayer(nn.Module):
         linear2_self_attention_cls: nn.Module = nn.Linear,
         linear1_feedforward_cls: nn.Module = nn.Linear,
         linear2_feedforward_cls: nn.Module = nn.Linear,
-        layer_norm_cls: nn.Module = LayerNorm,
         layer_norm_eps: float = 1e-5,
         adaptive_layer_norm=False,
     ) -> None:
@@ -225,29 +203,10 @@ class TransformerEncoderLayer(nn.Module):
         self.dropout1 = nn.Dropout(dropout)
         self.dropout2 = nn.Dropout(dropout)
 
-        # Legacy string support for activation function.
-        if isinstance(activation, str):
-            activation = _get_activation_fn(activation)
-        elif isinstance(activation, partial):
-            activation = activation(d_model)
-        elif activation == BalancedDoubleSwish:
-            activation = BalancedDoubleSwish(d_model)
+        self.activation = nn.ReLU()
 
-        # # We can't test self.activation in forward() in TorchScript,
-        # # so stash some information about it instead.
-        # if activation is F.relu or isinstance(activation, torch.nn.ReLU):
-        #     self.activation_relu_or_gelu = 1
-        # elif activation is F.gelu or isinstance(activation, torch.nn.GELU):
-        #     self.activation_relu_or_gelu = 2
-        # else:
-        #     self.activation_relu_or_gelu = 0
-        self.activation = activation
-
-        norm1 = layer_norm_cls(d_model, eps=layer_norm_eps, **factory_kwargs)
-        if layer_norm_cls == IdentityNorm:
-            norm2 = BalancedBasicNorm(d_model, eps=layer_norm_eps, **factory_kwargs)
-        else:
-            norm2 = layer_norm_cls(d_model, eps=layer_norm_eps, **factory_kwargs)
+        norm1 = LayerNorm(d_model, eps=layer_norm_eps, **factory_kwargs)
+        norm2 = LayerNorm(d_model, eps=layer_norm_eps, **factory_kwargs)
 
         if adaptive_layer_norm:
             self.norm1 = AdaptiveLayerNorm(d_model, norm1)

@@ -9,10 +9,6 @@ from torch.nn.init import constant_, xavier_normal_, xavier_uniform_
 from torch.nn.modules.linear import NonDynamicallyQuantizableLinear
 from torch.nn.parameter import Parameter
 
-from .patched_mha_with_cache import multi_head_attention_forward_patched
-
-F.multi_head_attention_forward = multi_head_attention_forward_patched
-
 
 class MultiheadAttention(Module):
     r"""Allows the model to jointly attend to information
@@ -96,7 +92,6 @@ class MultiheadAttention(Module):
         self.embed_dim = embed_dim
         self.kdim = kdim if kdim is not None else embed_dim
         self.vdim = vdim if vdim is not None else embed_dim
-        self._qkv_same_embed_dim = self.kdim == embed_dim and self.vdim == embed_dim
 
         self.num_heads = num_heads
         self.dropout = dropout
@@ -113,24 +108,12 @@ class MultiheadAttention(Module):
             self.bias_k = self.bias_v = None
 
         if linear1_cls == Linear:
-            if not self._qkv_same_embed_dim:
-                self.q_proj_weight = Parameter(
-                    torch.empty((embed_dim, embed_dim), **factory_kwargs),
-                )
-                self.k_proj_weight = Parameter(
-                    torch.empty((embed_dim, self.kdim), **factory_kwargs),
-                )
-                self.v_proj_weight = Parameter(
-                    torch.empty((embed_dim, self.vdim), **factory_kwargs),
-                )
-                self.register_parameter("in_proj_weight", None)
-            else:
-                self.in_proj_weight = Parameter(
-                    torch.empty((3 * embed_dim, embed_dim), **factory_kwargs),
-                )
-                self.register_parameter("q_proj_weight", None)
-                self.register_parameter("k_proj_weight", None)
-                self.register_parameter("v_proj_weight", None)
+            self.in_proj_weight = Parameter(
+                torch.empty((3 * embed_dim, embed_dim), **factory_kwargs),
+            )
+            self.register_parameter("q_proj_weight", None)
+            self.register_parameter("k_proj_weight", None)
+            self.register_parameter("v_proj_weight", None)
 
             if bias:
                 self.in_proj_bias = Parameter(
@@ -147,25 +130,22 @@ class MultiheadAttention(Module):
 
             self._reset_parameters()
         else:
-            if not self._qkv_same_embed_dim:
-                raise NotImplementedError
+            self.in_proj_linear = linear1_cls(
+                embed_dim,
+                3 * embed_dim,
+                bias=bias,
+                **factory_kwargs,
+            )
+            self.in_proj_weight = self.in_proj_linear.weight
+
+            self.register_parameter("q_proj_weight", None)
+            self.register_parameter("k_proj_weight", None)
+            self.register_parameter("v_proj_weight", None)
+
+            if bias:
+                self.in_proj_bias = self.in_proj_linear.bias
             else:
-                self.in_proj_linear = linear1_cls(
-                    embed_dim,
-                    3 * embed_dim,
-                    bias=bias,
-                    **factory_kwargs,
-                )
-                self.in_proj_weight = self.in_proj_linear.weight
-
-                self.register_parameter("q_proj_weight", None)
-                self.register_parameter("k_proj_weight", None)
-                self.register_parameter("v_proj_weight", None)
-
-                if bias:
-                    self.in_proj_bias = self.in_proj_linear.bias
-                else:
-                    self.register_parameter("in_proj_bias", None)
+                self.register_parameter("in_proj_bias", None)
 
             self.out_proj = linear2_cls(
                 embed_dim,
@@ -182,12 +162,7 @@ class MultiheadAttention(Module):
         self.add_zero_attn = add_zero_attn
 
     def _reset_parameters(self):
-        if self._qkv_same_embed_dim:
-            xavier_uniform_(self.in_proj_weight)
-        else:
-            xavier_uniform_(self.q_proj_weight)
-            xavier_uniform_(self.k_proj_weight)
-            xavier_uniform_(self.v_proj_weight)
+        xavier_uniform_(self.in_proj_weight)
 
         if self.in_proj_bias is not None:
             constant_(self.in_proj_bias, 0.0)
@@ -302,8 +277,6 @@ class MultiheadAttention(Module):
             why_not_fast_path = f"dropout was {self.dropout}, required zero"
         elif self.add_zero_attn:
             why_not_fast_path = "add_zero_attn was enabled"
-        elif not self._qkv_same_embed_dim:
-            why_not_fast_path = "_qkv_same_embed_dim was not True"
         elif attn_mask is not None:
             why_not_fast_path = "attn_mask was not None"
         elif query.is_nested and key_padding_mask is not None:
@@ -378,54 +351,27 @@ class MultiheadAttention(Module):
             else:
                 query, key, value = [x.transpose(1, 0) for x in (query, key, value)]
 
-        if not self._qkv_same_embed_dim:
-            attn_output, attn_output_weights = F.multi_head_attention_forward(
-                query,
-                key,
-                value,
-                self.embed_dim,
-                self.num_heads,
-                self.in_proj_weight,
-                self.in_proj_bias,
-                self.bias_k,
-                self.bias_v,
-                self.add_zero_attn,
-                self.dropout,
-                self.out_proj.weight,
-                self.out_proj.bias,
-                training=self.training,
-                key_padding_mask=key_padding_mask,
-                need_weights=need_weights,
-                attn_mask=attn_mask,
-                use_separate_proj_weight=True,
-                q_proj_weight=self.q_proj_weight,
-                k_proj_weight=self.k_proj_weight,
-                v_proj_weight=self.v_proj_weight,
-                average_attn_weights=average_attn_weights,
-                cache=cache,
-            )
-        else:
-            attn_output, attn_output_weights = F.multi_head_attention_forward(
-                query,
-                key,
-                value,
-                self.embed_dim,
-                self.num_heads,
-                self.in_proj_weight,
-                self.in_proj_bias,
-                self.bias_k,
-                self.bias_v,
-                self.add_zero_attn,
-                self.dropout,
-                self.out_proj.weight,
-                self.out_proj.bias,
-                training=self.training,
-                key_padding_mask=key_padding_mask,
-                need_weights=need_weights,
-                attn_mask=attn_mask,
-                average_attn_weights=average_attn_weights,
-                cache=cache,
-            )
+        attn_output, attn_output_weights = F.multi_head_attention_forward(
+            query,
+            key,
+            value,
+            self.embed_dim,
+            self.num_heads,
+            self.in_proj_weight,
+            self.in_proj_bias,
+            self.bias_k,
+            self.bias_v,
+            self.add_zero_attn,
+            self.dropout,
+            self.out_proj.weight,
+            self.out_proj.bias,
+            training=self.training,
+            key_padding_mask=key_padding_mask,
+            need_weights=need_weights,
+            attn_mask=attn_mask,
+            average_attn_weights=average_attn_weights,
+            cache=cache,
+        )
         if self.batch_first and is_batched:
             return attn_output.transpose(1, 0), attn_output_weights
         else:

@@ -22,11 +22,6 @@ from .modules.embedding import SinePositionalEmbedding, TokenEmbedding
 from .modules.transformer import LayerNorm, TransformerEncoder, TransformerEncoderLayer
 
 
-@torch.compile(dynamic=True, options={"triton.cudagraphs": True}, fullgraph=True)
-def sample_compiled(*args, **kwargs):
-    return sample(*args, **kwargs)
-
-
 # @torch.jit.script ## 使用的话首次推理会非常慢，而且推理速度不稳定
 # Efficient implementation equivalent to the following:
 def scaled_dot_product_attention(
@@ -737,7 +732,7 @@ class Text2SemanticDecoder(nn.Module):
             else:
                 attn_mask = F.pad(attn_mask, (0, 1), value=False)
 
-            samples = sample_compiled(
+            samples = sample(
                 logits,
                 y,
                 top_k=top_k,
@@ -939,7 +934,7 @@ class Text2SemanticDecoder(nn.Module):
             if idx < 11:  ###至少预测出10个token不然不给停止（0.4s）
                 logits = logits[:, :-1]
 
-            samples = sample_compiled(
+            samples = sample(
                 logits,
                 y,
                 top_k=top_k,

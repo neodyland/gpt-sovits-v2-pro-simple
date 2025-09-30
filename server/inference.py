@@ -44,8 +44,10 @@ languages = [
 
 bert_path = "./data/chinese-roberta-wwm-ext-large"
 tokenizer = AutoTokenizer.from_pretrained(bert_path)
-bert_model = AutoModelForMaskedLM.from_pretrained(bert_path).to(
-    dtype=dtype, device=device
+bert_model = (
+    AutoModelForMaskedLM.from_pretrained(bert_path)
+    .to(dtype=dtype, device=device)
+    .eval()
 )
 sv_cn_model = SV(device, dtype)
 
@@ -54,7 +56,7 @@ sv_cn_model = SV(device, dtype)
 def get_bert_feature(text: str, word2ph: Optional[List[int]]):
     inputs = tokenizer(text, return_tensors="pt")
     for i in inputs:
-        inputs[i] = inputs[i].to(device)
+        inputs[i] = inputs[i].to(device, non_blocking=True)
     res = bert_model(**inputs, output_hidden_states=True)
     res = torch.cat(res["hidden_states"][-3:-2], -1)[0].cpu()[1:-1]
     assert len(word2ph) == len(text)

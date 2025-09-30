@@ -190,6 +190,7 @@ def logits_to_probs(
     return probs
 
 
+@torch.compile(dynamic=True, options={"triton.cudagraphs": True}, fullgraph=True)
 def sample(
     logits,
     previous_tokens: Optional[torch.Tensor] = None,
