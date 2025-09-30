@@ -6,7 +6,6 @@ from typing import List, Optional
 import torch
 from torch import nn
 from torch.nn import functional as F
-from torchmetrics.classification import MulticlassAccuracy
 from tqdm import tqdm
 
 from .utils import (
@@ -304,15 +303,6 @@ class Text2SemanticDecoder(nn.Module):
         )
 
         self.ar_predict_layer = nn.Linear(self.model_dim, self.vocab_size, bias=False)
-        self.loss_fct = nn.CrossEntropyLoss(reduction="sum")
-
-        self.ar_accuracy_metric = MulticlassAccuracy(
-            self.vocab_size,
-            top_k=top_k,
-            average="micro",
-            multidim_average="global",
-            ignore_index=self.EOS,
-        )
 
         blocks = []
 
