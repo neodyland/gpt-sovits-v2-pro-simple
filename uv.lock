@@ -1,5 +1,5 @@
 version = 1
-revision = 2
+revision = 3
 requires-python = ">=3.12"
 resolution-markers = [
     "python_full_version >= '3.13'",
@@ -596,7 +596,8 @@ dependencies = [
     { name = "ko-pron" },
     { name = "librosa" },
     { name = "numpy" },
-    { name = "onnxruntime-gpu" },
+    { name = "onnxruntime", marker = "platform_machine == 'aarch64' or platform_machine == 'arm64'" },
+    { name = "onnxruntime-gpu", marker = "platform_machine == 'AMD64' or platform_machine == 'x86_64'" },
     { name = "opencc" },
     { name = "pyopenjtalk-dict" },
     { name = "pypinyin" },
@@ -633,7 +634,8 @@ requires-dist = [
     { name = "ko-pron", specifier = ">=1.3" },
     { name = "librosa", specifier = ">=0.11.0" },
     { name = "numpy", specifier = "<2" },
-    { name = "onnxruntime-gpu", specifier = ">=1.23.0" },
+    { name = "onnxruntime", marker = "platform_machine == 'aarch64' or platform_machine == 'arm64'", specifier = ">=1.23.0" },
+    { name = "onnxruntime-gpu", marker = "platform_machine == 'AMD64' or platform_machine == 'x86_64'", specifier = ">=1.23.0" },
     { name = "opencc", specifier = ">=1.1.9" },
     { name = "pyopenjtalk-dict", specifier = ">=0.3.4.dev2" },
     { name = "pypinyin", specifier = ">=0.55.0" },
