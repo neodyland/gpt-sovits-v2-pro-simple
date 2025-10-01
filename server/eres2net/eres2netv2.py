@@ -249,27 +249,6 @@ class ERes2NetV2(nn.Module):
             self.in_planes = planes * self.expansion
         return nn.Sequential(*layers)
 
-    def forward(self, x):
-        x = x.permute(0, 2, 1)  # (B,T,F) => (B,F,T)
-        x = x.unsqueeze_(1)
-        out = F.relu(self.bn1(self.conv1(x)))
-        out1 = self.layer1(out)
-        out2 = self.layer2(out1)
-        out3 = self.layer3(out2)
-        out4 = self.layer4(out3)
-        out3_ds = self.layer3_ds(out3)
-        fuse_out34 = self.fuse34(out4, out3_ds)
-        stats = self.pool(fuse_out34)
-
-        embed_a = self.seg_1(stats)
-        if self.two_emb_layer:
-            out = F.relu(embed_a)
-            out = self.seg_bn_1(out)
-            embed_b = self.seg_2(out)
-            return embed_b
-        else:
-            return embed_a
-
     def forward3(self, x):
         x = x.permute(0, 2, 1)  # (B,T,F) => (B,F,T)
         x = x.unsqueeze_(1)

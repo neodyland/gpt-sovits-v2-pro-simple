@@ -46,7 +46,6 @@ async def synthesize(
     top_p: float = Form(1.0, ge=0, le=1),
     temperature: float = Form(1.0, ge=0, le=1),
     speed: float = Form(1, ge=0.6, le=1.65),
-    freeze: bool = Form(False),
     pause_second: float = Form(0.3, ge=0.1, le=0.5),
 ):
     prompt_wav = await prompt_wav.read() if prompt_wav else None
@@ -63,7 +62,6 @@ async def synthesize(
             top_p=top_p,
             temperature=temperature,
             speed=speed,
-            if_freeze=freeze,
             inp_refs=ref_wavs,
             pause_second=pause_second,
         )

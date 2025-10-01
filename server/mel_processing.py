@@ -37,17 +37,19 @@ def spectrogram_torch(
         mode="reflect",
     )
     y = y.squeeze(1)
-    spec = torch.stft(
-        y,
-        n_fft,
-        hop_length=hop_size,
-        win_length=win_size,
-        window=hann_window[key],
-        center=center,
-        pad_mode="reflect",
-        normalized=False,
-        onesided=True,
-        return_complex=False,
+    spec = torch.view_as_real(
+        torch.stft(
+            y,
+            n_fft,
+            hop_length=hop_size,
+            win_length=win_size,
+            window=hann_window[key],
+            center=center,
+            pad_mode="reflect",
+            normalized=False,
+            onesided=True,
+            return_complex=True,
+        )
     )
 
     spec = (spec.pow(2).sum(-1) + 1e-8).sqrt()

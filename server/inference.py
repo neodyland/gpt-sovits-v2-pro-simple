@@ -111,16 +111,16 @@ def load(type: Literal["v2pro", "v2proplus"]):
     config = json.load(open("./data/gsv/config.json", "r"))
     hz_x_max_sec = 50 * config["data"]["max_sec"]  # hz is 50
     t2s_model = (
-        Text2SemanticDecoder(config=config, top_k=3)
-        .to(dtype=dtype, device=device)
-        .eval()
+        Text2SemanticDecoder(config=config).to(dtype=dtype, device=device).eval()
     )
-    t2s_model.load_state_dict(
-        st.load_file(
-            "./data/gsv/s1bert25hz-5kh-longer-12-epoch-369668-step.safetensors",
-            device=device,
-        ),
-        strict=False,
+    print(
+        t2s_model.load_state_dict(
+            st.load_file(
+                "./data/gsv/model.safetensors",
+                device=device,
+            ),
+            strict=False,
+        )
     )
 
 
@@ -198,7 +198,6 @@ def get_tts_wav(
     top_p=0.6,
     temperature=0.6,
     speed=1,
-    if_freeze=False,
     inp_refs=None,
     pause_second=0.3,
 ):
@@ -272,7 +271,7 @@ def get_tts_wav(
 
         t2 = ttime()
 
-        if i_text in cache and if_freeze == True:
+        if i_text in cache:
             pred_semantic = cache[i_text]
         else:
             pred_semantic, idx = t2s_model.infer_panel(
@@ -282,8 +281,8 @@ def get_tts_wav(
                 bert,
                 top_k=top_k,
                 top_p=top_p,
-                temperature=temperature,
                 early_stop_num=hz_x_max_sec,
+                temperature=temperature,
             )
             pred_semantic = pred_semantic[:, -idx:].unsqueeze(0)
             cache[i_text] = pred_semantic

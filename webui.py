@@ -66,13 +66,6 @@ with gr.Blocks(title="GPT-SoVITS WebUI", analytics_enabled=False) as app:
                     interactive=True,
                     scale=1,
                 )
-                if_freeze = gr.Checkbox(
-                    label="Whether to directly adjust the speaking speed and timbre to the last synthesis result. Prevent randomness.",
-                    value=False,
-                    interactive=True,
-                    show_label=True,
-                    scale=1,
-                )
                 with gr.Row():
                     speed = gr.Slider(
                         minimum=0.6,
@@ -138,7 +131,6 @@ with gr.Blocks(title="GPT-SoVITS WebUI", analytics_enabled=False) as app:
                 top_p,
                 temperature,
                 speed,
-                if_freeze,
                 inp_refs,
                 pause_second_slider,
             ],

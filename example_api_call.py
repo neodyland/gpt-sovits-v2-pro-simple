@@ -7,7 +7,7 @@ import numpy as np
 from argparse import ArgumentParser
 import time
 
-model = WhisperModel("kotoba-tech/kotoba-whisper-v2.0-faster")
+model = WhisperModel("large-v3-turbo")
 
 
 def clip(y: np.ndarray, sr: int):
@@ -47,7 +47,7 @@ def clip(y: np.ndarray, sr: int):
 
 def transcribe(wav: bytes):
     segments, info = model.transcribe(
-        BytesIO(wav), language="ja", chunk_length=15, condition_on_previous_text=False
+        BytesIO(wav), chunk_length=15, condition_on_previous_text=False
     )
     return "".join([segment.text for segment in segments])
 
