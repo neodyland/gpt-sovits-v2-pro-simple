@@ -138,7 +138,10 @@ cu_map = {
 }
 
 
-def preprocess_text(text: str, strategy: Strategy) -> list[str]:
+def preprocess_text_inner(
+    strategy: Strategy,
+    text: str,
+) -> list[str]:
     print("Selected input text: ", text)
     text = text.strip("\n")
     if strategy in cu_map:
@@ -171,6 +174,19 @@ def preprocess_text(text: str, strategy: Strategy) -> list[str]:
         else:
             _res_texts[len(_res_texts) - 1] += text
     return _res_texts
+
+
+def append_final_punctuation(text: str, text_language: str) -> str:
+    if text and text[-1] not in splits:
+        return text + ("." if text_language == "en" else "。")
+    return text.strip()
+
+
+def preprocess_text(strategy: Strategy, text: str, text_language: str) -> list[str]:
+    texts = preprocess_text_inner(strategy, text)
+    return [
+        append_final_punctuation(t, text_language) for t in texts if t.strip() != ""
+    ]
 
 
 __all__ = ["preprocess_text", "Strategy"]

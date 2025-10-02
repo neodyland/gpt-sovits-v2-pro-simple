@@ -1,11 +1,3 @@
-from server.inference import get_tts_wav, load
-from server.textcut import Strategy
-from fastapi import FastAPI, Response, File, Form, UploadFile
-from asyncio import Lock
-from scipy.io import wavfile
-from io import BytesIO
-from typing import Literal, Optional, List
-from typing_extensions import Annotated
 import torch
 
 torch.backends.cuda.matmul.allow_tf32 = True
@@ -13,7 +5,16 @@ torch.backends.cudnn.allow_tf32 = True
 torch.backends.cudnn.benchmark = True
 torch.set_float32_matmul_precision("medium")
 
-load("v2proplus")
+from server.tts import TTS
+from server.textcut import Strategy
+from fastapi import FastAPI, Response, File, Form, UploadFile
+from asyncio import Lock
+from scipy.io import wavfile
+from io import BytesIO
+from typing import Literal, Optional, List
+from typing_extensions import Annotated
+
+tts = TTS("v2proplus")
 
 app = FastAPI()
 lock = Lock()
@@ -35,7 +36,7 @@ type Language = Literal[
 
 @app.post("/synthesize")
 async def synthesize(
-    ref_wavs: Annotated[Optional[List[UploadFile]], File()] = None,
+    ref_wavs: Annotated[List[UploadFile], File()] = [],
     prompt_wav: Annotated[Optional[UploadFile], File()] = None,
     text: str = Form(...),
     prompt_text: Optional[str] = Form(None),
@@ -46,24 +47,22 @@ async def synthesize(
     top_p: float = Form(1.0, ge=0, le=1),
     temperature: float = Form(1.0, ge=0, le=1),
     speed: float = Form(1, ge=0.6, le=1.65),
-    pause_second: float = Form(0.3, ge=0.1, le=0.5),
 ):
     prompt_wav = await prompt_wav.read() if prompt_wav else None
-    ref_wavs = [BytesIO(await f.read()) for f in ref_wavs] if ref_wavs else None
+    ref_wavs = [BytesIO(await f.read()) for f in ref_wavs]
     async with lock:
-        sr, pcm = get_tts_wav(
-            ref_wav_path=prompt_wav,
+        sr, pcm = tts.synthesize(
+            ref_wavs=ref_wavs,
+            prompt_wav=prompt_wav,
             prompt_text=prompt_text,
             prompt_language=prompt_language,
+            how_to_cut=how_to_cut,
             text=text,
             text_language=text_language,
-            how_to_cut=how_to_cut,
             top_k=top_k,
             top_p=top_p,
             temperature=temperature,
             speed=speed,
-            inp_refs=ref_wavs,
-            pause_second=pause_second,
         )
         print(len(pcm) / sr)
     with BytesIO() as buf:

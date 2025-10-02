@@ -299,30 +299,34 @@ class SynthesizerTrn(nn.Module):
         self.ge_to512 = nn.Linear(gin_channels, 512)
         self.prelu = nn.PReLU(num_parameters=gin_channels)
 
+    def get_ge(self, refer: torch.Tensor, sv_emb: torch.Tensor) -> torch.Tensor:
+        refer_lengths = torch.LongTensor([refer.size(2)]).to(refer.device)
+        refer_mask = torch.unsqueeze(sequence_mask(refer_lengths, refer.size(2)), 1).to(
+            refer.dtype
+        )
+        ge = self.ref_enc(refer[:, :704] * refer_mask, refer_mask)
+        sv_emb = self.sv_emb(sv_emb)  # B*20480->B*512
+        ge += sv_emb.unsqueeze(-1)
+        ge = self.prelu(ge)
+        return ge
+
+    def get_ges(
+        self, refers_sb_embs: list[tuple[torch.Tensor, torch.Tensor]]
+    ) -> torch.Tensor:
+        ges = torch.stack(
+            [self.get_ge(refer, sv_emb) for refer, sv_emb in refers_sb_embs], 0
+        ).mean(0)
+        return ges
+
     @torch.no_grad()
-    def decode(self, codes, text, refer, noise_scale=0.5, speed=1, sv_emb=None):
-        def get_ge(refer, sv_emb):
-            ge = None
-            if refer is not None:
-                refer_lengths = torch.LongTensor([refer.size(2)]).to(refer.device)
-                refer_mask = torch.unsqueeze(
-                    sequence_mask(refer_lengths, refer.size(2)), 1
-                ).to(refer.dtype)
-                ge = self.ref_enc(refer[:, :704] * refer_mask, refer_mask)
-                sv_emb = self.sv_emb(sv_emb)  # B*20480->B*512
-                ge += sv_emb.unsqueeze(-1)
-                ge = self.prelu(ge)
-            return ge
-
-        if type(refer) == list:
-            ges = []
-            for idx, _refer in enumerate(refer):
-                ge = get_ge(_refer, sv_emb[idx])
-                ges.append(ge)
-            ge = torch.stack(ges, 0).mean(0)
-        else:
-            ge = get_ge(refer, sv_emb)
-
+    def decode(
+        self,
+        codes,
+        text,
+        ge: torch.Tensor,
+        noise_scale=0.5,
+        speed=1,
+    ) -> torch.Tensor:
         y_lengths = torch.LongTensor([codes.size(2) * 2]).to(codes.device)
         text_lengths = torch.LongTensor([text.size(-1)]).to(text.device)
 
@@ -345,7 +349,7 @@ class SynthesizerTrn(nn.Module):
         o = self.dec((z * y_mask)[:, :, :], g=ge)
         return o
 
-    def extract_latent(self, x):
+    def extract_latent(self, x: torch.Tensor) -> torch.Tensor:
         ssl = self.ssl_proj(x)
-        quantized, codes, commit_loss, quantized_list = self.quantizer(ssl)
+        quantized, codes, quantized_list = self.quantizer(ssl)
         return codes.transpose(0, 1)

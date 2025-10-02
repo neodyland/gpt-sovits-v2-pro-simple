@@ -272,9 +272,6 @@ class VectorQuantization(nn.Module):
             nn.Linear(_codebook_dim, dim) if requires_projection else nn.Identity()
         )
 
-        self.epsilon = epsilon
-        self.commitment_weight = commitment_weight
-
         self._codebook = EuclideanCodebook(
             dim=_codebook_dim,
             codebook_size=codebook_size,
@@ -284,44 +281,22 @@ class VectorQuantization(nn.Module):
             epsilon=epsilon,
             threshold_ema_dead_code=threshold_ema_dead_code,
         )
-        self.codebook_size = codebook_size
 
-    @property
-    def codebook(self):
-        return self._codebook.embed
-
-    def encode(self, x):
-        x = rearrange(x, "b d n -> b n d")
-        x = self.project_in(x)
-        embed_in = self._codebook.encode(x)
-        return embed_in
-
-    def decode(self, embed_ind):
+    def decode(self, embed_ind: torch.Tensor):
         quantize = self._codebook.decode(embed_ind)
         quantize = self.project_out(quantize)
         quantize = rearrange(quantize, "b n d -> b d n")
         return quantize
 
-    def forward(self, x):
-        device = x.device
+    def forward(self, x: torch.Tensor):
         x = rearrange(x, "b d n -> b n d")
         x = self.project_in(x)
 
         quantize, embed_ind = self._codebook(x)
 
-        if self.training:
-            quantize = x + (quantize - x).detach()
-
-        loss = torch.tensor([0.0], device=device, requires_grad=self.training)
-
-        if self.training:
-            if self.commitment_weight > 0:
-                commit_loss = F.mse_loss(quantize.detach(), x)
-                loss = loss + commit_loss * self.commitment_weight
-
         quantize = self.project_out(quantize)
         quantize = rearrange(quantize, "b n d -> b d n")
-        return quantize, embed_ind, loss
+        return quantize, embed_ind
 
 
 class ResidualVectorQuantization(nn.Module):
@@ -341,24 +316,22 @@ class ResidualVectorQuantization(nn.Module):
         quantized_out = 0.0
         residual = x
 
-        all_losses = []
         all_indices = []
         out_quantized = []
 
         n_q = n_q or len(self.layers)
 
         for i, layer in enumerate(self.layers[:n_q]):
-            quantized, indices, loss = layer(residual)
+            quantized, indices = layer(residual)
             residual = residual - quantized
             quantized_out = quantized_out + quantized
 
             all_indices.append(indices)
-            all_losses.append(loss)
             if layers and i in layers:
                 out_quantized.append(quantized)
 
-        out_losses, out_indices = map(torch.stack, (all_losses, all_indices))
-        return quantized_out, out_indices, out_losses, out_quantized
+        out_indices = torch.stack(all_indices)
+        return quantized_out, out_indices, out_quantized
 
     def decode(self, q_indices: torch.Tensor, st: int = 0) -> torch.Tensor:
         quantized_out = torch.tensor(0.0, device=q_indices.device)

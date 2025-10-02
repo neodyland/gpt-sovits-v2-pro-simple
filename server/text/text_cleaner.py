@@ -45,7 +45,9 @@ special = [
 ]
 
 
-def clean_text(text: str, language: str) -> Tuple[List[str], Optional[List[int]], str]:
+def clean_text_inner(
+    text: str, language: str
+) -> Tuple[List[str], Optional[List[int]], str]:
     if language not in language_module_map:
         language = "en"
         text = " "
@@ -89,7 +91,7 @@ def clean_special(text, special_s, target_symbol, text_normalize, g2p):
     return new_ph, phones[1], norm_text
 
 
-def clean_text_inf(text: str, language: str):
-    phones, word2ph, norm_text = clean_text(text, language)
+def clean_text(text: str, language: str):
+    phones, word2ph, norm_text = clean_text_inner(text, language)
     phones = cleaned_text_to_sequence(phones)
     return phones, word2ph, norm_text

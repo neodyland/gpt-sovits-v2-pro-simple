@@ -13,7 +13,7 @@ def multinomial_sample_one_no_sync(
 
 
 def logits_to_probs(
-    logits,
+    logits: torch.Tensor,
     previous_tokens: Optional[torch.Tensor] = None,
     temperature: float = 1.0,
     top_k: Optional[int] = None,
@@ -28,7 +28,8 @@ def logits_to_probs(
             score * repetition_penalty,
             score / repetition_penalty,
         )
-        logits.scatter_(dim=1, index=previous_tokens, src=score)
+        # logits.scatter_(dim=1, index=previous_tokens, src=score)
+        logits = logits.scatter(dim=1, index=previous_tokens, src=score)
 
     if top_p is not None and top_p < 1.0:
         sorted_logits, sorted_indices = torch.sort(logits, descending=True)
@@ -55,7 +56,6 @@ def logits_to_probs(
     return probs
 
 
-@torch.compile(dynamic=True, options={"triton.cudagraphs": True}, fullgraph=True)
 def sample(
     logits,
     previous_tokens: Optional[torch.Tensor] = None,

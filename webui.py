@@ -1,21 +1,36 @@
-from server.inference import get_tts_wav, languages, load
+import torch
+
+torch.backends.cuda.matmul.allow_tf32 = True
+torch.backends.cudnn.allow_tf32 = True
+torch.backends.cudnn.benchmark = True
+torch.set_float32_matmul_precision("medium")
+
+from server.tts import TTS, languages
 import gradio as gr
 import numpy as np
+from typing import Optional
 
-load("v2proplus")
+
+tts = TTS("v2proplus")
 
 
 def inference(
+    ref_wav_paths: Optional[list[str]],
+    prompt_wav_path: Optional[str],
     *args,
 ):
-    sr, pcm = get_tts_wav(*args)
+    ref_wav_paths = ref_wav_paths or []
+    ref_wavs = [open(f, "rb").read() for f in ref_wav_paths]
+    if prompt_wav_path is not None:
+        prompt_wav = open(prompt_wav_path, "rb").read()
+    sr, pcm = tts.synthesize(ref_wavs, prompt_wav, *args)
     yield sr, (pcm * 32767).astype(np.int16)
 
 
 with gr.Blocks(title="GPT-SoVITS WebUI", analytics_enabled=False) as app:
     with gr.Group():
         with gr.Row():
-            inp_ref = gr.Audio(
+            prompt_wav = gr.Audio(
                 label="Please upload the reference audio within 3~10 seconds. If it exceeds the limit, an error will be reported!",
                 type="filepath",
                 scale=13,
@@ -34,8 +49,8 @@ with gr.Blocks(title="GPT-SoVITS WebUI", analytics_enabled=False) as app:
                     choices=languages,
                     value="ja",
                 )
-                inp_refs = gr.File(
-                    label="Optional: Upload multiple reference audios (same gender recommended) by dragging and dropping multiple files to evenly blend their timbres. If this item is not filled in, the timbre is controlled by a single reference audio on the left. If you are fine-tuning the model, it is recommended that the reference audio is all within the fine-tuning training set timbre, and the base model is ignored.",
+                ref_wavs = gr.File(
+                    label="Upload multiple reference audios (same gender recommended) by dragging and dropping multiple files to evenly blend their timbres. If this item is not filled in, the timbre is controlled by a single reference audio on the left. If you are fine-tuning the model, it is recommended that the reference audio is all within the fine-tuning training set timbre, and the base model is ignored.",
                     file_count="multiple",
                 )
         with gr.Row():
@@ -50,7 +65,7 @@ with gr.Blocks(title="GPT-SoVITS WebUI", analytics_enabled=False) as app:
                 text_language = gr.Dropdown(
                     label="Languages that need to be synthesized. The smaller the restriction range, the better the discrimination effect.",
                     choices=languages,
-                    value="ja",
+                    value="auto",
                     scale=1,
                 )
                 how_to_cut = gr.Dropdown(
@@ -73,15 +88,6 @@ with gr.Blocks(title="GPT-SoVITS WebUI", analytics_enabled=False) as app:
                         step=0.05,
                         label="speed",
                         value=1,
-                        interactive=True,
-                        scale=1,
-                    )
-                    pause_second_slider = gr.Slider(
-                        minimum=0.1,
-                        maximum=0.5,
-                        step=0.01,
-                        label="pause duration (seconds)",
-                        value=0.3,
                         interactive=True,
                         scale=1,
                     )
@@ -121,18 +127,17 @@ with gr.Blocks(title="GPT-SoVITS WebUI", analytics_enabled=False) as app:
         inference_button.click(
             inference,
             [
-                inp_ref,
+                ref_wavs,
+                prompt_wav,
                 prompt_text,
                 prompt_language,
+                how_to_cut,
                 text,
                 text_language,
-                how_to_cut,
                 top_k,
                 top_p,
                 temperature,
                 speed,
-                inp_refs,
-                pause_second_slider,
             ],
             [output],
         )

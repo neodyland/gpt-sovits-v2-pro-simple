@@ -1,10 +1,9 @@
 import math
 import torch
 from torch import nn
-from torch.nn.utils import remove_weight_norm, weight_norm
 from torch.nn import functional as F
 
-from .commons import convert_pad_shape, fused_add_tanh_sigmoid_multiply
+from .commons import convert_pad_shape
 from .modules import LayerNorm
 
 
@@ -17,9 +16,6 @@ class Encoder(nn.Module):
         n_layers,
         kernel_size=1,
         p_dropout=0.0,
-        window_size=4,
-        isflow=False,
-        **kwargs,
     ):
         super().__init__()
         self.hidden_channels = hidden_channels
@@ -28,7 +24,6 @@ class Encoder(nn.Module):
         self.n_layers = n_layers
         self.kernel_size = kernel_size
         self.p_dropout = p_dropout
-        self.window_size = window_size
 
         self.drop = nn.Dropout(p_dropout)
         self.attn_layers = nn.ModuleList()
@@ -42,7 +37,7 @@ class Encoder(nn.Module):
                     hidden_channels,
                     n_heads,
                     p_dropout=p_dropout,
-                    window_size=window_size,
+                    window_size=4,
                 )
             )
             self.norm_layers_1.append(LayerNorm(hidden_channels))
@@ -56,28 +51,12 @@ class Encoder(nn.Module):
                 )
             )
             self.norm_layers_2.append(LayerNorm(hidden_channels))
-        if isflow:
-            cond_layer = nn.Conv1d(
-                kwargs["gin_channels"], 2 * hidden_channels * n_layers, 1
-            )
-            self.cond_pre = nn.Conv1d(hidden_channels, 2 * hidden_channels, 1)
-            self.cond_layer = weight_norm_modules(cond_layer, name="weight")
-            self.gin_channels = kwargs["gin_channels"]
 
-    def forward(self, x, x_mask, g=None):
+    def forward(self, x: torch.Tensor, x_mask: torch.Tensor):
         attn_mask = x_mask.unsqueeze(2) * x_mask.unsqueeze(-1)
         x = x * x_mask
-        if g is not None:
-            g = self.cond_layer(g)
 
         for i in range(self.n_layers):
-            if g is not None:
-                x = self.cond_pre(x)
-                cond_offset = i * 2 * self.hidden_channels
-                g_l = g[:, cond_offset : cond_offset + 2 * self.hidden_channels, :]
-                x = fused_add_tanh_sigmoid_multiply(
-                    x, g_l, torch.IntTensor([self.hidden_channels])
-                )
             y = self.attn_layers[i](x, x, attn_mask)
             y = self.drop(y)
             x = self.norm_layers_1[i](x + y)
@@ -97,23 +76,12 @@ class MultiHeadAttention(nn.Module):
         n_heads,
         p_dropout=0.0,
         window_size=None,
-        heads_share=True,
-        block_length=None,
-        proximal_bias=False,
-        proximal_init=False,
     ):
         super().__init__()
         assert channels % n_heads == 0
 
-        self.channels = channels
-        self.out_channels = out_channels
         self.n_heads = n_heads
-        self.p_dropout = p_dropout
         self.window_size = window_size
-        self.heads_share = heads_share
-        self.block_length = block_length
-        self.proximal_bias = proximal_bias
-        self.proximal_init = proximal_init
         self.attn = None
 
         self.k_channels = channels // n_heads
@@ -124,7 +92,7 @@ class MultiHeadAttention(nn.Module):
         self.drop = nn.Dropout(p_dropout)
 
         if window_size is not None:
-            n_heads_rel = 1 if heads_share else n_heads
+            n_heads_rel = 1
             rel_stddev = self.k_channels**-0.5
             self.emb_rel_k = nn.Parameter(
                 torch.randn(n_heads_rel, window_size * 2 + 1, self.k_channels)
@@ -138,10 +106,6 @@ class MultiHeadAttention(nn.Module):
         nn.init.xavier_uniform_(self.conv_q.weight)
         nn.init.xavier_uniform_(self.conv_k.weight)
         nn.init.xavier_uniform_(self.conv_v.weight)
-        if proximal_init:
-            with torch.no_grad():
-                self.conv_k.weight.copy_(self.conv_q.weight)
-                self.conv_k.bias.copy_(self.conv_q.bias)
 
     def forward(self, x, c, attn_mask=None):
         q = self.conv_q(x)
@@ -171,23 +135,8 @@ class MultiHeadAttention(nn.Module):
             )
             scores_local = self._relative_position_to_absolute_position(rel_logits)
             scores = scores + scores_local
-        if self.proximal_bias:
-            assert t_s == t_t, "Proximal bias is only available for self-attention."
-            scores = scores + self._attention_bias_proximal(t_s).to(
-                device=scores.device, dtype=scores.dtype
-            )
         if mask is not None:
             scores = scores.masked_fill(mask == 0, -1e4)
-            if self.block_length is not None:
-                assert t_s == t_t, (
-                    "Local attention is only available for self-attention."
-                )
-                block_mask = (
-                    torch.ones_like(scores)
-                    .triu(-self.block_length)
-                    .tril(self.block_length)
-                )
-                scores = scores.masked_fill(block_mask == 0, -1e4)
         p_attn = F.softmax(scores, dim=-1)  # [b, n_h, t_t, t_s]
         p_attn = self.drop(p_attn)
         output = torch.matmul(p_attn, value)
@@ -272,67 +221,31 @@ class MultiHeadAttention(nn.Module):
         x_final = x_flat.view([batch, heads, length, 2 * length])[:, :, :, 1:]
         return x_final
 
-    def _attention_bias_proximal(self, length):
-        """Bias for self-attention to encourage attention to close positions.
-        Args:
-            length: an integer scalar.
-        Returns:
-            a Tensor with shape [1, 1, length, length]
-        """
-        r = torch.arange(length, dtype=torch.float32)
-        diff = torch.unsqueeze(r, 0) - torch.unsqueeze(r, 1)
-        return torch.unsqueeze(torch.unsqueeze(-torch.log1p(torch.abs(diff)), 0), 0)
-
 
 class FFN(nn.Module):
     def __init__(
         self,
-        in_channels,
-        out_channels,
-        filter_channels,
-        kernel_size,
+        in_channels: int,
+        out_channels: int,
+        filter_channels: int,
+        kernel_size: int,
         p_dropout=0.0,
-        activation=None,
-        causal=False,
     ):
         super().__init__()
-        self.in_channels = in_channels
-        self.out_channels = out_channels
-        self.filter_channels = filter_channels
         self.kernel_size = kernel_size
-        self.p_dropout = p_dropout
-        self.activation = activation
-        self.causal = causal
-
-        if causal:
-            self.padding = self._causal_padding
-        else:
-            self.padding = self._same_padding
 
         self.conv_1 = nn.Conv1d(in_channels, filter_channels, kernel_size)
         self.conv_2 = nn.Conv1d(filter_channels, out_channels, kernel_size)
         self.drop = nn.Dropout(p_dropout)
 
-    def forward(self, x, x_mask):
-        x = self.conv_1(self.padding(x * x_mask))
-        if self.activation == "gelu":
-            x = x * torch.sigmoid(1.702 * x)
-        else:
-            x = torch.relu(x)
+    def forward(self, x: torch.Tensor, x_mask: torch.Tensor):
+        x = self.conv_1(self._same_padding(x * x_mask))
+        x = x.relu()
         x = self.drop(x)
-        x = self.conv_2(self.padding(x * x_mask))
+        x = self.conv_2(self._same_padding(x * x_mask))
         return x * x_mask
 
-    def _causal_padding(self, x):
-        if self.kernel_size == 1:
-            return x
-        pad_l = self.kernel_size - 1
-        pad_r = 0
-        padding = [[0, 0], [0, 0], [pad_l, pad_r]]
-        x = F.pad(x, convert_pad_shape(padding))
-        return x
-
-    def _same_padding(self, x):
+    def _same_padding(self, x: torch.Tensor):
         if self.kernel_size == 1:
             return x
         pad_l = (self.kernel_size - 1) // 2
@@ -340,113 +253,3 @@ class FFN(nn.Module):
         padding = [[0, 0], [0, 0], [pad_l, pad_r]]
         x = F.pad(x, convert_pad_shape(padding))
         return x
-
-
-class Depthwise_Separable_Conv1D(nn.Module):
-    def __init__(
-        self,
-        in_channels,
-        out_channels,
-        kernel_size,
-        stride=1,
-        padding=0,
-        dilation=1,
-        bias=True,
-        padding_mode="zeros",  # TODO: refine this type
-        device=None,
-        dtype=None,
-    ):
-        super().__init__()
-        self.depth_conv = nn.Conv1d(
-            in_channels=in_channels,
-            out_channels=in_channels,
-            kernel_size=kernel_size,
-            groups=in_channels,
-            stride=stride,
-            padding=padding,
-            dilation=dilation,
-            bias=bias,
-            padding_mode=padding_mode,
-            device=device,
-            dtype=dtype,
-        )
-        self.point_conv = nn.Conv1d(
-            in_channels=in_channels,
-            out_channels=out_channels,
-            kernel_size=1,
-            bias=bias,
-            device=device,
-            dtype=dtype,
-        )
-
-    def forward(self, input):
-        return self.point_conv(self.depth_conv(input))
-
-    def weight_norm(self):
-        self.depth_conv = weight_norm(self.depth_conv, name="weight")
-        self.point_conv = weight_norm(self.point_conv, name="weight")
-
-    def remove_weight_norm(self):
-        self.depth_conv = remove_weight_norm(self.depth_conv, name="weight")
-        self.point_conv = remove_weight_norm(self.point_conv, name="weight")
-
-
-class Depthwise_Separable_TransposeConv1D(nn.Module):
-    def __init__(
-        self,
-        in_channels,
-        out_channels,
-        kernel_size,
-        stride=1,
-        padding=0,
-        output_padding=0,
-        bias=True,
-        dilation=1,
-        padding_mode="zeros",  # TODO: refine this type
-        device=None,
-        dtype=None,
-    ):
-        super().__init__()
-        self.depth_conv = nn.ConvTranspose1d(
-            in_channels=in_channels,
-            out_channels=in_channels,
-            kernel_size=kernel_size,
-            groups=in_channels,
-            stride=stride,
-            output_padding=output_padding,
-            padding=padding,
-            dilation=dilation,
-            bias=bias,
-            padding_mode=padding_mode,
-            device=device,
-            dtype=dtype,
-        )
-        self.point_conv = nn.Conv1d(
-            in_channels=in_channels,
-            out_channels=out_channels,
-            kernel_size=1,
-            bias=bias,
-            device=device,
-            dtype=dtype,
-        )
-
-    def forward(self, input):
-        return self.point_conv(self.depth_conv(input))
-
-    def weight_norm(self):
-        self.depth_conv = weight_norm(self.depth_conv, name="weight")
-        self.point_conv = weight_norm(self.point_conv, name="weight")
-
-    def remove_weight_norm(self):
-        remove_weight_norm(self.depth_conv, name="weight")
-        remove_weight_norm(self.point_conv, name="weight")
-
-
-def weight_norm_modules(module, name="weight", dim=0):
-    if isinstance(module, Depthwise_Separable_Conv1D) or isinstance(
-        module, Depthwise_Separable_TransposeConv1D
-    ):
-        module.weight_norm()
-        return module
-    else:
-        return weight_norm(module, name, dim)

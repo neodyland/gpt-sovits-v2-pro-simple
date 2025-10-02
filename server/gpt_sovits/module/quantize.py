@@ -6,22 +6,12 @@
 
 """Residual vector quantizer implementation."""
 
-from dataclasses import dataclass, field
 import typing as tp
 
 import torch
 from torch import nn
 
 from .core_vq import ResidualVectorQuantization
-
-
-@dataclass
-class QuantizedResult:
-    quantized: torch.Tensor
-    codes: torch.Tensor
-    bandwidth: torch.Tensor  # bandwidth in kb/s used, per batch item.
-    penalty: tp.Optional[torch.Tensor] = None
-    metrics: dict = field(default_factory=dict)
 
 
 class ResidualVectorQuantizer(nn.Module):
@@ -71,7 +61,7 @@ class ResidualVectorQuantizer(nn.Module):
         x: torch.Tensor,
         n_q: tp.Optional[int] = None,
         layers: tp.Optional[list] = None,
-    ) -> QuantizedResult:
+    ):
         """Residual vector quantization on the given input tensor.
         Args:
             x (torch.Tensor): Input tensor.
@@ -87,10 +77,8 @@ class ResidualVectorQuantizer(nn.Module):
             raise ValueError(
                 f"Last layer index in layers: A {max(layers)}. Number of quantizers in RVQ: B {self.n_q}. A must less than B."
             )
-        quantized, codes, commit_loss, quantized_list = self.vq(
-            x, n_q=n_q, layers=layers
-        )
-        return quantized, codes, torch.mean(commit_loss), quantized_list
+        quantized, codes, quantized_list = self.vq(x, n_q=n_q, layers=layers)
+        return quantized, codes, quantized_list
 
     def decode(self, codes: torch.Tensor, st: int = 0) -> torch.Tensor:
         """Decode the given codes to the quantized representation.
