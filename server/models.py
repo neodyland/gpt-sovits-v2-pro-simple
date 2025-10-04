@@ -41,9 +41,10 @@ class T2S:
         config_path="./data/gsv/config.json",
         model_path="./data/gsv/model.safetensors",
     ):
-        config = json.load(open(config_path, "r"))
         self.model = (
-            Text2SemanticDecoder(config=config).to(dtype=dtype, device=device).eval()
+            Text2SemanticDecoder(config=json.load(open(config_path, "r")))
+            .to(dtype=dtype, device=device)
+            .eval()
         )
         self.model.load_state_dict(
             st.load_file(
@@ -60,22 +61,21 @@ class SV:
         dtype,
         model_path="./data/sv/model.safetensors",
     ):
-        embedding_model = (
+        self.embedding_model = (
             ERes2NetV2(base_width=24, scale=4, expansion=4)
             .eval()
             .to(device=device, dtype=dtype)
         )
-        embedding_model.load_state_dict(
+        self.embedding_model.load_state_dict(
             st.load_file(
                 model_path,
                 device=device,
             )
         )
         self.dtype = dtype
-        self.embedding_model = embedding_model
 
     @torch.inference_mode()
-    def compute_embedding3(self, wav):
+    def compute_embedding3(self, wav: torch.Tensor):
         feat = torch.stack(
             [
                 fbank(

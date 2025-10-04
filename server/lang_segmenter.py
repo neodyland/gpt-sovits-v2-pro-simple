@@ -11,12 +11,12 @@ fast_langdetect.infer._default_detector = fast_langdetect.infer.LangDetector(
 from split_lang import LangSplitter
 
 
-def full_en(text):
+def full_en(text: str):
     pattern = r"^(?=.*[A-Za-z])[A-Za-z0-9\s\u0020-\u007E\u2000-\u206F\u3000-\u303F\uFF00-\uFFEF]+$"
     return bool(re.match(pattern, text))
 
 
-def full_cjk(text):
+def full_cjk(text: str):
     # 来自wiki
     cjk_ranges = [
         (0x4E00, 0x9FFF),  # CJK Unified Ideographs

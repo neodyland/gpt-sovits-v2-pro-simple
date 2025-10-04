@@ -167,7 +167,7 @@ class Generator(nn.Module):
         gin_channels=0,
         is_bias=False,
     ):
-        super(Generator, self).__init__()
+        super().__init__()
         self.num_kernels = len(resblock_kernel_sizes)
         self.num_upsamples = len(upsample_rates)
         self.conv_pre = nn.Conv1d(
@@ -295,15 +295,6 @@ class SynthesizerTrn(nn.Module):
         ge = self.prelu(ge)
         return ge
 
-    def get_ges(
-        self, refers_sb_embs: list[tuple[torch.Tensor, torch.Tensor]]
-    ) -> torch.Tensor:
-        ges = torch.stack(
-            [self.get_ge(refer, sv_emb) for refer, sv_emb in refers_sb_embs], 0
-        ).mean(0)
-        return ges
-
-    @torch.no_grad()
     def decode(
         self,
         codes,
@@ -332,7 +323,7 @@ class SynthesizerTrn(nn.Module):
         z = self.flow(z_p, y_mask, g=ge, reverse=True)
 
         o = self.dec((z * y_mask)[:, :, :], g=ge)
-        return o
+        return o[0][0]
 
     def extract_latent(self, x: torch.Tensor) -> torch.Tensor:
         ssl = self.ssl_proj(x)
