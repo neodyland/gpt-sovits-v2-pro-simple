@@ -315,7 +315,7 @@ class LinearNorm(nn.Module):
         bias=True,
         spectral_norm=False,
     ):
-        super(LinearNorm, self).__init__()
+        super().__init__()
         self.fc = nn.Linear(in_channels, out_channels, bias)
 
         if spectral_norm:
@@ -328,7 +328,7 @@ class LinearNorm(nn.Module):
 
 class Mish(nn.Module):
     def __init__(self):
-        super(Mish, self).__init__()
+        super().__init__()
 
     def forward(self, x):
         return x * torch.tanh(F.softplus(x))
@@ -341,7 +341,7 @@ class Conv1dGLU(nn.Module):
     """
 
     def __init__(self, in_channels, out_channels, kernel_size, dropout):
-        super(Conv1dGLU, self).__init__()
+        super().__init__()
         self.out_channels = out_channels
         self.conv1 = ConvNorm(in_channels, 2 * out_channels, kernel_size=kernel_size)
         self.dropout = nn.Dropout(dropout)
@@ -367,7 +367,7 @@ class ConvNorm(nn.Module):
         bias=True,
         spectral_norm=False,
     ):
-        super(ConvNorm, self).__init__()
+        super().__init__()
 
         if padding is None:
             assert kernel_size % 2 == 1
@@ -477,7 +477,7 @@ class MelStyleEncoder(nn.Module):
         style_head=2,
         dropout=0.1,
     ):
-        super(MelStyleEncoder, self).__init__()
+        super().__init__()
         self.in_dim = n_mel_channels
         self.hidden_dim = style_hidden
         self.out_dim = style_vector_dim

@@ -15,7 +15,7 @@ from .embedding import SinePositionalEmbedding, TokenEmbedding
 
 class T2SMLP(nn.Module):
     def __init__(self, d_model, dim_feedforward):
-        super(T2SMLP, self).__init__()
+        super().__init__()
         self.linear1 = nn.Linear(d_model, dim_feedforward)
         self.linear2 = nn.Linear(dim_feedforward, d_model)
 
@@ -31,7 +31,7 @@ class T2SBlock(nn.Module):
         num_heads: int,
         hidden_dim: int,
     ):
-        super(T2SBlock, self).__init__()
+        super().__init__()
         self.num_heads = num_heads
         self.mlp = T2SMLP(
             hidden_dim,
@@ -121,7 +121,7 @@ class T2SBlock(nn.Module):
 
 class T2STransformer(nn.Module):
     def __init__(self, num_head: int, model_dim: int, num_layers: int):
-        super(T2STransformer, self).__init__()
+        super().__init__()
         self.model_dim = model_dim
         self.blocks = nn.ModuleList(
             [

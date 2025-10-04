@@ -58,10 +58,10 @@ class SV:
         self,
         device,
         dtype,
-        model_path="./data/sv/pretrained_eres2netv2w24s4ep4.safetensors",
+        model_path="./data/sv/model.safetensors",
     ):
         embedding_model = (
-            ERes2NetV2(baseWidth=24, scale=4, expansion=4)
+            ERes2NetV2(base_width=24, scale=4, expansion=4)
             .eval()
             .to(device=device, dtype=dtype)
         )

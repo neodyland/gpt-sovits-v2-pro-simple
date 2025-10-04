@@ -1,19 +1,32 @@
 # Copyright 3D-Speaker (https://github.com/alibaba-damo-academy/3D-Speaker). All Rights Reserved.
 # Licensed under the Apache License, Version 2.0 (http://www.apache.org/licenses/LICENSE-2.0)
 
-"""
-To further improve the short-duration feature extraction capability of ERes2Net, we expand the channel dimension
-within each stage. However, this modification also increases the number of model parameters and computational complexity.
-To alleviate this problem, we propose an improved ERes2NetV2 by pruning redundant structures, ultimately reducing
-both the model parameters and its computational cost.
-"""
-
 import torch
 import math
 import torch.nn as nn
 import torch.nn.functional as F
-from .pooling_layers import pooling_layers
-from .fusion import AFF
+
+
+class AFF(nn.Module):
+    def __init__(self, channels=64, r=4):
+        super().__init__()
+        inter_channels = int(channels // r)
+
+        self.local_att = nn.Sequential(
+            nn.Conv2d(channels * 2, inter_channels, kernel_size=1, stride=1, padding=0),
+            nn.BatchNorm2d(inter_channels),
+            nn.SiLU(inplace=True),
+            nn.Conv2d(inter_channels, channels, kernel_size=1, stride=1, padding=0),
+            nn.BatchNorm2d(channels),
+        )
+
+    def forward(self, x: torch.Tensor, ds_y: torch.Tensor):
+        xa = torch.cat((x, ds_y), dim=1)
+        x_att = self.local_att(xa)
+        x_att = 1.0 + torch.tanh(x_att)
+        xo = torch.mul(x, x_att) + torch.mul(ds_y, 2.0 - x_att)
+
+        return xo
 
 
 class ReLU(nn.Hardtanh):
@@ -26,9 +39,11 @@ class ReLU(nn.Hardtanh):
 
 
 class BasicBlockERes2NetV2(nn.Module):
-    def __init__(self, in_planes, planes, stride=1, baseWidth=26, scale=2, expansion=2):
-        super(BasicBlockERes2NetV2, self).__init__()
-        width = int(math.floor(planes * (baseWidth / 64.0)))
+    def __init__(
+        self, in_planes, planes, stride=1, base_width=26, scale=2, expansion=2
+    ):
+        super().__init__()
+        width = int(math.floor(planes * (base_width / 64.0)))
         self.conv1 = nn.Conv2d(
             in_planes, width * scale, kernel_size=1, stride=stride, bias=False
         )
@@ -95,9 +110,11 @@ class BasicBlockERes2NetV2(nn.Module):
 
 
 class BasicBlockERes2NetV2AFF(nn.Module):
-    def __init__(self, in_planes, planes, stride=1, baseWidth=26, scale=2, expansion=2):
-        super(BasicBlockERes2NetV2AFF, self).__init__()
-        width = int(math.floor(planes * (baseWidth / 64.0)))
+    def __init__(
+        self, in_planes, planes, stride=1, base_width=26, scale=2, expansion=2
+    ):
+        super().__init__()
+        width = int(math.floor(planes * (base_width / 64.0)))
         self.conv1 = nn.Conv2d(
             in_planes, width * scale, kernel_size=1, stride=stride, bias=False
         )
@@ -172,25 +189,18 @@ class BasicBlockERes2NetV2AFF(nn.Module):
 class ERes2NetV2(nn.Module):
     def __init__(
         self,
-        block=BasicBlockERes2NetV2,
-        block_fuse=BasicBlockERes2NetV2AFF,
         num_blocks=[3, 4, 6, 3],
         m_channels=64,
         feat_dim=80,
         embedding_size=192,
-        baseWidth=26,
+        base_width=26,
         scale=2,
         expansion=2,
-        pooling_func="TSTP",
-        two_emb_layer=False,
     ):
-        super(ERes2NetV2, self).__init__()
+        super().__init__()
         self.in_planes = m_channels
-        self.feat_dim = feat_dim
-        self.embedding_size = embedding_size
         self.stats_dim = int(feat_dim / 8) * m_channels * 8
-        self.two_emb_layer = two_emb_layer
-        self.baseWidth = baseWidth
+        self.base_width = base_width
         self.scale = scale
         self.expansion = expansion
 
@@ -198,13 +208,17 @@ class ERes2NetV2(nn.Module):
             1, m_channels, kernel_size=3, stride=1, padding=1, bias=False
         )
         self.bn1 = nn.BatchNorm2d(m_channels)
-        self.layer1 = self._make_layer(block, m_channels, num_blocks[0], stride=1)
-        self.layer2 = self._make_layer(block, m_channels * 2, num_blocks[1], stride=2)
+        self.layer1 = self._make_layer(
+            BasicBlockERes2NetV2, m_channels, num_blocks[0], stride=1
+        )
+        self.layer2 = self._make_layer(
+            BasicBlockERes2NetV2, m_channels * 2, num_blocks[1], stride=2
+        )
         self.layer3 = self._make_layer(
-            block_fuse, m_channels * 4, num_blocks[2], stride=2
+            BasicBlockERes2NetV2AFF, m_channels * 4, num_blocks[2], stride=2
         )
         self.layer4 = self._make_layer(
-            block_fuse, m_channels * 8, num_blocks[3], stride=2
+            BasicBlockERes2NetV2AFF, m_channels * 8, num_blocks[3], stride=2
         )
 
         # Downsampling module
@@ -220,18 +234,6 @@ class ERes2NetV2(nn.Module):
         # Bottom-up fusion module
         self.fuse34 = AFF(channels=m_channels * 8 * self.expansion, r=4)
 
-        self.n_stats = 1 if pooling_func == "TAP" or pooling_func == "TSDP" else 2
-        self.pool = pooling_layers[pooling_func](in_dim=self.stats_dim * self.expansion)
-        self.seg_1 = nn.Linear(
-            self.stats_dim * self.expansion * self.n_stats, embedding_size
-        )
-        if self.two_emb_layer:
-            self.seg_bn_1 = nn.BatchNorm1d(embedding_size, affine=False)
-            self.seg_2 = nn.Linear(embedding_size, embedding_size)
-        else:
-            self.seg_bn_1 = nn.Identity()
-            self.seg_2 = nn.Identity()
-
     def _make_layer(self, block, planes, num_blocks, stride):
         strides = [stride] + [1] * (num_blocks - 1)
         layers = []
@@ -241,7 +243,7 @@ class ERes2NetV2(nn.Module):
                     self.in_planes,
                     planes,
                     stride,
-                    baseWidth=self.baseWidth,
+                    base_width=self.base_width,
                     scale=self.scale,
                     expansion=self.expansion,
                 )
