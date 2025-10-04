@@ -1,4 +1,5 @@
 import torch
+from typing import Optional
 
 
 def init_weights(m, mean=0.0, std=0.01):
@@ -27,7 +28,7 @@ def convert_pad_shape(pad_shape):
     return pad_shape
 
 
-def sequence_mask(length, max_length=None):
+def sequence_mask(length: torch.Tensor, max_length: Optional[int] = None):
     if max_length is None:
         max_length = length.max()
     x = torch.arange(max_length, dtype=length.dtype, device=length.device)

@@ -90,7 +90,7 @@ class LangSegmenter:
         "en": "en",
     }
 
-    def getTexts(text, default_lang=""):
+    def get_texts(text, default_lang=""):
         lang_splitter = LangSplitter(lang_map=LangSegmenter.DEFAULT_LANG_MAP)
         lang_splitter.merge_across_digit = False
         substr = lang_splitter.split_by_lang(text=text)
@@ -245,38 +245,38 @@ def segment(
     textlist = []
     langlist = []
     if language == "all_zh":
-        for tmp in LangSegmenter.getTexts(text, "zh"):
+        for tmp in LangSegmenter.get_texts(text, "zh"):
             langlist.append(tmp["lang"])
             textlist.append(tmp["text"])
     elif language == "all_yue":
-        for tmp in LangSegmenter.getTexts(text, "zh"):
+        for tmp in LangSegmenter.get_texts(text, "zh"):
             if tmp["lang"] == "zh":
                 tmp["lang"] = "yue"
             langlist.append(tmp["lang"])
             textlist.append(tmp["text"])
     elif language == "all_ja":
-        for tmp in LangSegmenter.getTexts(text, "ja"):
+        for tmp in LangSegmenter.get_texts(text, "ja"):
             langlist.append(tmp["lang"])
             textlist.append(tmp["text"])
     elif language == "all_ko":
-        for tmp in LangSegmenter.getTexts(text, "ko"):
+        for tmp in LangSegmenter.get_texts(text, "ko"):
             langlist.append(tmp["lang"])
             textlist.append(tmp["text"])
     elif language == "en":
         langlist.append("en")
         textlist.append(text)
     elif language == "auto":
-        for tmp in LangSegmenter.getTexts(text):
+        for tmp in LangSegmenter.get_texts(text):
             langlist.append(tmp["lang"])
             textlist.append(tmp["text"])
     elif language == "auto_yue":
-        for tmp in LangSegmenter.getTexts(text):
+        for tmp in LangSegmenter.get_texts(text):
             if tmp["lang"] == "zh":
                 tmp["lang"] = "yue"
             langlist.append(tmp["lang"])
             textlist.append(tmp["text"])
     else:
-        for tmp in LangSegmenter.getTexts(text):
+        for tmp in LangSegmenter.get_texts(text):
             if langlist:
                 if (tmp["lang"] == "en" and langlist[-1] == "en") or (
                     tmp["lang"] != "en" and langlist[-1] != "en"
@@ -294,11 +294,11 @@ def segment(
 
 if __name__ == "__main__":
     text = "MyGO?,你也喜欢まいご吗？"
-    print(LangSegmenter.getTexts(text))
+    print(LangSegmenter.get_texts(text))
 
     text = "ねえ、知ってる？最近、僕は天文学を勉強してるんだ。君の瞳が星空みたいにキラキラしてるからさ。"
-    print(LangSegmenter.getTexts(text))
+    print(LangSegmenter.get_texts(text))
 
     text = "当时ThinkPad T60刚刚发布，一同推出的还有一款名为Advanced Dock的扩展坞配件。这款扩展坞通过连接T60底部的插槽，扩展出包括PCIe在内的一大堆接口，并且自带电源，让T60可以安装桌面显卡来提升性能。"
-    print(LangSegmenter.getTexts(text, "zh"))
-    print(LangSegmenter.getTexts(text))
+    print(LangSegmenter.get_texts(text, "zh"))
+    print(LangSegmenter.get_texts(text))

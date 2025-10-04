@@ -17,7 +17,7 @@ from .module.commons import (
     init_weights,
     sequence_mask,
 )
-from torch.nn.utils import weight_norm, remove_weight_norm
+from torch.nn.utils import weight_norm
 
 from ..symbols import symbols
 
@@ -25,24 +25,16 @@ from ..symbols import symbols
 class TextEncoder(nn.Module):
     def __init__(
         self,
-        out_channels,
-        hidden_channels,
-        filter_channels,
-        n_heads,
-        n_layers,
-        kernel_size,
-        p_dropout,
-        latent_channels=192,
+        out_channels: int,
+        hidden_channels: int,
+        filter_channels: int,
+        n_heads: int,
+        n_layers: int,
+        kernel_size: int,
+        p_dropout: float,
     ):
         super().__init__()
         self.out_channels = out_channels
-        self.hidden_channels = hidden_channels
-        self.filter_channels = filter_channels
-        self.n_heads = n_heads
-        self.n_layers = n_layers
-        self.kernel_size = kernel_size
-        self.p_dropout = p_dropout
-        self.latent_channels = latent_channels
 
         self.ssl_proj = nn.Conv1d(768, hidden_channels, 1)
 
@@ -162,7 +154,7 @@ class ResidualCouplingBlock(nn.Module):
         return x
 
 
-class Generator(torch.nn.Module):
+class Generator(nn.Module):
     def __init__(
         self,
         initial_channel,
@@ -231,13 +223,6 @@ class Generator(torch.nn.Module):
         x = torch.tanh(x)
 
         return x
-
-    def remove_weight_norm(self):
-        print("Removing weight norm...")
-        for l in self.ups:
-            remove_weight_norm(l)
-        for l in self.resblocks:
-            l.remove_weight_norm()
 
 
 class SynthesizerTrn(nn.Module):

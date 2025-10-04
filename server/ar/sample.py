@@ -2,6 +2,7 @@
 # reference: https://github.com/lifeiteng/vall-e
 from typing import Tuple, Optional
 
+from torch.nn import functional as F
 import torch
 
 
@@ -33,9 +34,7 @@ def logits_to_probs(
 
     if top_p is not None and top_p < 1.0:
         sorted_logits, sorted_indices = torch.sort(logits, descending=True)
-        cum_probs = torch.cumsum(
-            torch.nn.functional.softmax(sorted_logits, dim=-1), dim=-1
-        )
+        cum_probs = torch.cumsum(F.softmax(sorted_logits, dim=-1), dim=-1)
         sorted_indices_to_remove = cum_probs > top_p
         sorted_indices_to_remove[:, 0] = False  # keep at least one option
         indices_to_remove = sorted_indices_to_remove.scatter(
@@ -52,7 +51,7 @@ def logits_to_probs(
         pivot = v[:, -1].unsqueeze(-1)
         logits = torch.where(logits < pivot, -float("Inf"), logits)
 
-    probs = torch.nn.functional.softmax(logits, dim=-1)
+    probs = F.softmax(logits, dim=-1)
     return probs
 
 

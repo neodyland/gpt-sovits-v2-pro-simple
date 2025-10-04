@@ -3,7 +3,6 @@ import torch
 from torch import nn
 from torch.nn import functional as F
 
-from torch.nn import Conv1d
 from torch.nn.utils import weight_norm, remove_weight_norm
 
 from .commons import init_weights, get_padding, fused_add_tanh_sigmoid_multiply
@@ -21,13 +20,13 @@ class LayerNorm(nn.Module):
         self.gamma = nn.Parameter(torch.ones(channels))
         self.beta = nn.Parameter(torch.zeros(channels))
 
-    def forward(self, x):
+    def forward(self, x: torch.Tensor):
         x = x.transpose(1, -1)
         x = F.layer_norm(x, (self.channels,), self.gamma, self.beta, self.eps)
         return x.transpose(1, -1)
 
 
-class WN(torch.nn.Module):
+class WN(nn.Module):
     def __init__(
         self,
         hidden_channels,
@@ -37,7 +36,7 @@ class WN(torch.nn.Module):
         gin_channels=0,
         p_dropout=0,
     ):
-        super(WN, self).__init__()
+        super().__init__()
         assert kernel_size % 2 == 1
         self.hidden_channels = hidden_channels
         self.kernel_size = (kernel_size,)
@@ -46,27 +45,25 @@ class WN(torch.nn.Module):
         self.gin_channels = gin_channels
         self.p_dropout = p_dropout
 
-        self.in_layers = torch.nn.ModuleList()
-        self.res_skip_layers = torch.nn.ModuleList()
+        self.in_layers = nn.ModuleList()
+        self.res_skip_layers = nn.ModuleList()
         self.drop = nn.Dropout(p_dropout)
 
         if gin_channels != 0:
-            cond_layer = torch.nn.Conv1d(
-                gin_channels, 2 * hidden_channels * n_layers, 1
-            )
-            self.cond_layer = torch.nn.utils.weight_norm(cond_layer, name="weight")
+            cond_layer = nn.Conv1d(gin_channels, 2 * hidden_channels * n_layers, 1)
+            self.cond_layer = nn.utils.weight_norm(cond_layer, name="weight")
 
         for i in range(n_layers):
             dilation = dilation_rate**i
             padding = int((kernel_size * dilation - dilation) / 2)
-            in_layer = torch.nn.Conv1d(
+            in_layer = nn.Conv1d(
                 hidden_channels,
                 2 * hidden_channels,
                 kernel_size,
                 dilation=dilation,
                 padding=padding,
             )
-            in_layer = torch.nn.utils.weight_norm(in_layer, name="weight")
+            in_layer = nn.utils.weight_norm(in_layer, name="weight")
             self.in_layers.append(in_layer)
 
             # last one is not necessary
@@ -75,11 +72,11 @@ class WN(torch.nn.Module):
             else:
                 res_skip_channels = hidden_channels
 
-            res_skip_layer = torch.nn.Conv1d(hidden_channels, res_skip_channels, 1)
-            res_skip_layer = torch.nn.utils.weight_norm(res_skip_layer, name="weight")
+            res_skip_layer = nn.Conv1d(hidden_channels, res_skip_channels, 1)
+            res_skip_layer = nn.utils.weight_norm(res_skip_layer, name="weight")
             self.res_skip_layers.append(res_skip_layer)
 
-    def forward(self, x, x_mask, g=None, **kwargs):
+    def forward(self, x, x_mask, g=None):
         output = torch.zeros_like(x)
         n_channels_tensor = torch.IntTensor([self.hidden_channels])
 
@@ -106,22 +103,14 @@ class WN(torch.nn.Module):
                 output = output + res_skip_acts
         return output * x_mask
 
-    def remove_weight_norm(self):
-        if self.gin_channels != 0:
-            torch.nn.utils.remove_weight_norm(self.cond_layer)
-        for l in self.in_layers:
-            torch.nn.utils.remove_weight_norm(l)
-        for l in self.res_skip_layers:
-            torch.nn.utils.remove_weight_norm(l)
 
-
-class ResBlock1(torch.nn.Module):
-    def __init__(self, channels, kernel_size=3, dilation=(1, 3, 5)):
-        super(ResBlock1, self).__init__()
+class ResBlock1(nn.Module):
+    def __init__(self, channels: int, kernel_size=3, dilation=(1, 3, 5)):
+        super().__init__()
         self.convs1 = nn.ModuleList(
             [
                 weight_norm(
-                    Conv1d(
+                    nn.Conv1d(
                         channels,
                         channels,
                         kernel_size,
@@ -131,7 +120,7 @@ class ResBlock1(torch.nn.Module):
                     )
                 ),
                 weight_norm(
-                    Conv1d(
+                    nn.Conv1d(
                         channels,
                         channels,
                         kernel_size,
@@ -141,7 +130,7 @@ class ResBlock1(torch.nn.Module):
                     )
                 ),
                 weight_norm(
-                    Conv1d(
+                    nn.Conv1d(
                         channels,
                         channels,
                         kernel_size,
@@ -157,7 +146,7 @@ class ResBlock1(torch.nn.Module):
         self.convs2 = nn.ModuleList(
             [
                 weight_norm(
-                    Conv1d(
+                    nn.Conv1d(
                         channels,
                         channels,
                         kernel_size,
@@ -167,7 +156,7 @@ class ResBlock1(torch.nn.Module):
                     )
                 ),
                 weight_norm(
-                    Conv1d(
+                    nn.Conv1d(
                         channels,
                         channels,
                         kernel_size,
@@ -177,7 +166,7 @@ class ResBlock1(torch.nn.Module):
                     )
                 ),
                 weight_norm(
-                    Conv1d(
+                    nn.Conv1d(
                         channels,
                         channels,
                         kernel_size,
@@ -205,20 +194,14 @@ class ResBlock1(torch.nn.Module):
             x = x * x_mask
         return x
 
-    def remove_weight_norm(self):
-        for l in self.convs1:
-            remove_weight_norm(l)
-        for l in self.convs2:
-            remove_weight_norm(l)
 
-
-class ResBlock2(torch.nn.Module):
-    def __init__(self, channels, kernel_size=3, dilation=(1, 3)):
-        super(ResBlock2, self).__init__()
+class ResBlock2(nn.Module):
+    def __init__(self, channels: int, kernel_size=3, dilation=(1, 3)):
+        super().__init__()
         self.convs = nn.ModuleList(
             [
                 weight_norm(
-                    Conv1d(
+                    nn.Conv1d(
                         channels,
                         channels,
                         kernel_size,
@@ -228,7 +211,7 @@ class ResBlock2(torch.nn.Module):
                     )
                 ),
                 weight_norm(
-                    Conv1d(
+                    nn.Conv1d(
                         channels,
                         channels,
                         kernel_size,
@@ -390,7 +373,7 @@ class ConvNorm(nn.Module):
             assert kernel_size % 2 == 1
             padding = int(dilation * (kernel_size - 1) / 2)
 
-        self.conv = torch.nn.Conv1d(
+        self.conv = nn.Conv1d(
             in_channels,
             out_channels,
             kernel_size=kernel_size,
@@ -434,7 +417,7 @@ class ScaledDotProductAttention(nn.Module):
 class MultiHeadAttention(nn.Module):
     """Multi-Head Attention module"""
 
-    def __init__(self, n_head, d_model, d_k, d_v, dropout=0.0, spectral_norm=False):
+    def __init__(self, n_head, d_model, d_k, d_v, dropout=0.0):
         super().__init__()
 
         self.n_head = n_head
@@ -451,12 +434,6 @@ class MultiHeadAttention(nn.Module):
 
         self.fc = nn.Linear(n_head * d_v, d_model)
         self.dropout = nn.Dropout(dropout)
-
-        if spectral_norm:
-            self.w_qs = nn.utils.spectral_norm(self.w_qs)
-            self.w_ks = nn.utils.spectral_norm(self.w_ks)
-            self.w_vs = nn.utils.spectral_norm(self.w_vs)
-            self.fc = nn.utils.spectral_norm(self.fc)
 
     def forward(self, x, mask=None):
         d_k, d_v, n_head = self.d_k, self.d_v, self.n_head

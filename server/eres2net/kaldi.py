@@ -2,7 +2,7 @@ import math
 from typing import Tuple
 
 import torch
-from torch import Tensor
+from torch.nn import functional as F
 
 # numeric_limits<float>::epsilon() 1.1920928955078125e-07
 EPSILON = torch.tensor(torch.finfo(torch.float).eps)
@@ -27,8 +27,8 @@ def _next_power_of_2(x: int) -> int:
 
 
 def _get_strided(
-    waveform: Tensor, window_size: int, window_shift: int, snip_edges: bool
-) -> Tensor:
+    waveform: torch.Tensor, window_size: int, window_shift: int, snip_edges: bool
+) -> torch.Tensor:
     r"""Given a waveform (1D tensor of size ``num_samples``), it returns a 2D tensor (m, ``window_size``)
     representing how the window is shifted along the waveform. Each row is a frame.
 
@@ -76,7 +76,7 @@ def _feature_window_function(
     blackman_coeff: float,
     device: torch.device,
     dtype: int,
-) -> Tensor:
+) -> torch.Tensor:
     r"""Returns a window function with the given type and size"""
     if window_type == HANNING:
         return torch.hann_window(
@@ -112,8 +112,8 @@ def _feature_window_function(
 
 
 def _get_log_energy(
-    strided_input: Tensor, epsilon: Tensor, energy_floor: float
-) -> Tensor:
+    strided_input: torch.Tensor, epsilon: torch.Tensor, energy_floor: float
+) -> torch.Tensor:
     r"""Returns the log energy of size (m) for a strided_input (m,*)"""
     device, dtype = strided_input.device, strided_input.dtype
     log_energy = torch.max(strided_input.pow(2).sum(1), epsilon).log()  # size (m)
@@ -125,14 +125,14 @@ def _get_log_energy(
 
 
 def _get_waveform_and_window_properties(
-    waveform: Tensor,
+    waveform: torch.Tensor,
     channel: int,
     sample_frequency: float,
     frame_shift: float,
     frame_length: float,
     round_to_power_of_two: bool,
     preemphasis_coefficient: float,
-) -> Tuple[Tensor, int, int, int]:
+) -> Tuple[torch.Tensor, int, int, int]:
     r"""Gets the waveform and window properties"""
     channel = max(channel, 0)
     assert channel < waveform.size(0), "Invalid channel {} for size {}".format(
@@ -160,7 +160,7 @@ def _get_waveform_and_window_properties(
 
 
 def _get_window(
-    waveform: Tensor,
+    waveform: torch.Tensor,
     padded_window_size: int,
     window_size: int,
     window_shift: int,
@@ -172,7 +172,7 @@ def _get_window(
     dither: float,
     remove_dc_offset: bool,
     preemphasis_coefficient: float,
-) -> Tuple[Tensor, Tensor]:
+) -> Tuple[torch.Tensor, torch.Tensor]:
     r"""Gets a window and its log energy
 
     Returns:
@@ -202,7 +202,7 @@ def _get_window(
 
     if preemphasis_coefficient != 0.0:
         # strided_input[i,j] -= preemphasis_coefficient * strided_input[i, max(0, j-1)] for all i,j
-        offset_strided_input = torch.nn.functional.pad(
+        offset_strided_input = F.pad(
             strided_input.unsqueeze(0), (1, 0), mode="replicate"
         ).squeeze(0)  # size (m, window_size + 1)
         strided_input = (
@@ -218,7 +218,7 @@ def _get_window(
     # Pad columns with zero until we reach size (m, padded_window_size)
     if padded_window_size != window_size:
         padding_right = padded_window_size - window_size
-        strided_input = torch.nn.functional.pad(
+        strided_input = F.pad(
             strided_input.unsqueeze(0), (0, padding_right), mode="constant", value=0
         ).squeeze(0)
 
@@ -231,7 +231,7 @@ def _get_window(
     return strided_input, signal_log_energy
 
 
-def _subtract_column_mean(tensor: Tensor, subtract_mean: bool) -> Tensor:
+def _subtract_column_mean(tensor: torch.Tensor, subtract_mean: bool) -> torch.Tensor:
     # subtracts the column mean of the tensor size (m, n) if subtract_mean=True
     # it returns size (m, n)
     if subtract_mean:
@@ -240,7 +240,7 @@ def _subtract_column_mean(tensor: Tensor, subtract_mean: bool) -> Tensor:
     return tensor
 
 
-def inverse_mel_scale(mel_freq: Tensor) -> Tensor:
+def inverse_mel_scale(mel_freq: torch.Tensor) -> torch.Tensor:
     return 700.0 * ((mel_freq / 1127.0).exp() - 1.0)
 
 
@@ -248,7 +248,7 @@ def mel_scale_scalar(freq: float) -> float:
     return 1127.0 * math.log(1.0 + freq / 700.0)
 
 
-def mel_scale(freq: Tensor) -> Tensor:
+def mel_scale(freq: torch.Tensor) -> torch.Tensor:
     return 1127.0 * (1.0 + freq / 700.0).log()
 
 
@@ -258,8 +258,8 @@ def vtln_warp_freq(
     low_freq: float,
     high_freq: float,
     vtln_warp_factor: float,
-    freq: Tensor,
-) -> Tensor:
+    freq: torch.Tensor,
+) -> torch.Tensor:
     r"""This computes a VTLN warping function that is not the same as HTK's one,
     but has similar inputs (this function has the advantage of never producing
     empty bins).
@@ -339,8 +339,8 @@ def vtln_warp_mel_freq(
     low_freq,
     high_freq: float,
     vtln_warp_factor: float,
-    mel_freq: Tensor,
-) -> Tensor:
+    mel_freq: torch.Tensor,
+) -> torch.Tensor:
     r"""
     Args:
         vtln_low_cutoff (float): Lower frequency cutoffs for VTLN
@@ -376,7 +376,7 @@ def get_mel_banks(
     vtln_warp_factor: float,
     device=None,
     dtype=None,
-) -> Tuple[Tensor, Tensor]:
+) -> Tuple[torch.Tensor, torch.Tensor]:
     """
     Returns:
         (Tensor, Tensor): The tuple consists of ``bins`` (which is
@@ -467,7 +467,7 @@ cache = {}
 
 
 def fbank(
-    waveform: Tensor,
+    waveform: torch.Tensor,
     blackman_coeff: float = 0.42,
     channel: int = -1,
     dither: float = 0.0,
@@ -493,7 +493,7 @@ def fbank(
     vtln_low: float = 100.0,
     vtln_warp: float = 1.0,
     window_type: str = POVEY,
-) -> Tensor:
+) -> torch.Tensor:
     r"""Create a fbank from a raw audio signal. This matches the input/output of Kaldi's
     compute-fbank-feats.
 
@@ -613,9 +613,7 @@ def fbank(
         mel_energies = cache[cache_key]
 
     # pad right column with zeros and add dimension, size (num_mel_bins, padded_window_size // 2 + 1)
-    mel_energies = torch.nn.functional.pad(
-        mel_energies, (0, 1), mode="constant", value=0
-    )
+    mel_energies = F.pad(mel_energies, (0, 1), mode="constant", value=0)
 
     # sum with mel fiterbanks over the power spectrum, size (m, num_mel_bins)
     mel_energies = torch.mm(spectrum, mel_energies.T)

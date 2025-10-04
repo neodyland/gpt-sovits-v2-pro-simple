@@ -101,7 +101,8 @@ class TTS:
                 f"./data/v2pro/{variant}.safetensors",
                 device=device,
             ),
-        )
+            strict=True,
+        )  #!TODO
 
         self.zero_wav_torch = torch.zeros(
             int(self.sampling_rate * 0.3), dtype=dtype, device=device

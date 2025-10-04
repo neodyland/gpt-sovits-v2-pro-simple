@@ -33,27 +33,13 @@ class ResidualVectorQuantizer(nn.Module):
         dimension: int = 256,
         n_q: int = 8,
         bins: int = 1024,
-        decay: float = 0.99,
-        kmeans_init: bool = True,
-        kmeans_iters: int = 50,
-        threshold_ema_dead_code: int = 2,
     ):
         super().__init__()
         self.n_q = n_q
-        self.dimension = dimension
-        self.bins = bins
-        self.decay = decay
-        self.kmeans_init = kmeans_init
-        self.kmeans_iters = kmeans_iters
-        self.threshold_ema_dead_code = threshold_ema_dead_code
         self.vq = ResidualVectorQuantization(
-            dim=self.dimension,
-            codebook_size=self.bins,
+            dim=dimension,
+            codebook_size=bins,
             num_quantizers=self.n_q,
-            decay=self.decay,
-            kmeans_init=self.kmeans_init,
-            kmeans_iters=self.kmeans_iters,
-            threshold_ema_dead_code=self.threshold_ema_dead_code,
         )
 
     def forward(
@@ -80,11 +66,11 @@ class ResidualVectorQuantizer(nn.Module):
         quantized, codes, quantized_list = self.vq(x, n_q=n_q, layers=layers)
         return quantized, codes, quantized_list
 
-    def decode(self, codes: torch.Tensor, st: int = 0) -> torch.Tensor:
+    def decode(self, codes: torch.Tensor) -> torch.Tensor:
         """Decode the given codes to the quantized representation.
         Args:
             codes (torch.Tensor): Input indices for each quantizer.
             st (int): Start to decode input codes from which layers. Default: 0.
         """
-        quantized = self.vq.decode(codes, st=st)
+        quantized = self.vq.decode(codes)
         return quantized
