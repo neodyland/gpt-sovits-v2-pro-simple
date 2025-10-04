@@ -14,11 +14,8 @@ class TokenEmbedding(nn.Module):
     ):
         super().__init__()
 
-        self.vocab_size = vocab_size
-        self.embedding_dim = embedding_dim
-
         self.dropout = nn.Dropout(p=dropout)
-        self.word_embeddings = nn.Embedding(self.vocab_size, self.embedding_dim)
+        self.word_embeddings = nn.Embedding(vocab_size, embedding_dim)
 
     def forward(self, x: torch.Tensor):
         x = self.word_embeddings(x)
