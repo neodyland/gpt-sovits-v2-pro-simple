@@ -4,6 +4,7 @@ torch.backends.cuda.matmul.allow_tf32 = True
 torch.backends.cudnn.allow_tf32 = True
 torch.backends.cudnn.benchmark = True
 torch.set_float32_matmul_precision("medium")
+torch.autograd.set_grad_enabled(False)
 
 from server.tts import TTS, languages
 import gradio as gr
@@ -23,7 +24,8 @@ def inference(
     ref_wavs = [open(f, "rb").read() for f in ref_wav_paths]
     if prompt_wav_path is not None:
         prompt_wav = open(prompt_wav_path, "rb").read()
-    sr, pcm = tts.synthesize(ref_wavs, prompt_wav, *args)
+    sr, pcm, timing = tts.synthesize(ref_wavs, prompt_wav, *args)
+    print(timing)
     yield sr, (pcm * 32767).astype(np.int16)
 
 

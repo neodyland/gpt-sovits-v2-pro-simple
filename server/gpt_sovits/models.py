@@ -144,13 +144,9 @@ class ResidualCouplingBlock(nn.Module):
             )
             self.flows.append(Flip())
 
-    def forward(self, x, x_mask, g=None, reverse=False):
-        if not reverse:
-            for flow in self.flows:
-                x, _ = flow(x, x_mask, g=g, reverse=reverse)
-        else:
-            for flow in reversed(self.flows):
-                x = flow(x, x_mask, g=g, reverse=reverse)
+    def forward(self, x: torch.Tensor, x_mask: torch.Tensor, g: torch.Tensor):
+        for flow in reversed(self.flows):
+            x = flow(x, x_mask, g=g)
         return x
 
 
@@ -200,23 +196,18 @@ class Generator(nn.Module):
         self.conv_post = nn.Conv1d(ch, 1, 7, 1, padding=3, bias=is_bias)
         self.ups.apply(init_weights)
 
-        if gin_channels != 0:
-            self.cond = nn.Conv1d(gin_channels, upsample_initial_channel, 1)
+        self.cond = nn.Conv1d(gin_channels, upsample_initial_channel, 1)
 
-    def forward(self, x, g=None):
-        x = self.conv_pre(x)
-        if g is not None:
-            x = x + self.cond(g)
+    @torch.compile(dynamic=True, fullgraph=True)
+    def forward(self, x: torch.Tensor, g: torch.Tensor):
+        x = self.conv_pre(x) + self.cond(g)
 
         for i in range(self.num_upsamples):
             x = F.leaky_relu(x, LRELU_SLOPE)
             x = self.ups[i](x)
-            xs = None
+            xs = torch.zeros_like(x)
             for j in range(self.num_kernels):
-                if xs is None:
-                    xs = self.resblocks[i * self.num_kernels + j](x)
-                else:
-                    xs += self.resblocks[i * self.num_kernels + j](x)
+                xs += self.resblocks[i * self.num_kernels + j](x)
             x = xs / self.num_kernels
         x = F.leaky_relu(x)
         x = self.conv_post(x)
@@ -297,8 +288,8 @@ class SynthesizerTrn(nn.Module):
 
     def decode(
         self,
-        codes,
-        text,
+        codes: torch.Tensor,
+        text: torch.Tensor,
         ge: torch.Tensor,
         noise_scale=0.5,
         speed=1,
@@ -308,7 +299,7 @@ class SynthesizerTrn(nn.Module):
 
         quantized = self.quantizer.decode(codes)
         quantized = F.interpolate(
-            quantized, size=int(quantized.shape[-1] * 2), mode="nearest"
+            quantized, size=int(quantized.size(-1) * 2), mode="nearest"
         )
         x, m_p, logs_p, y_mask = self.enc_p(
             quantized,
@@ -320,7 +311,7 @@ class SynthesizerTrn(nn.Module):
         )
         z_p = m_p + torch.randn_like(m_p) * torch.exp(logs_p) * noise_scale
 
-        z = self.flow(z_p, y_mask, g=ge, reverse=True)
+        z = self.flow(z_p, y_mask, g=ge)
 
         o = self.dec((z * y_mask)[:, :, :], g=ge)
         return o[0][0]

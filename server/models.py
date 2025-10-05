@@ -1,3 +1,6 @@
+import os
+
+os.environ["TOKENIZERS_PARALLELISM"] = "false"
 import torch
 from typing import List, Optional
 from transformers import AutoModelForMaskedLM, AutoTokenizer

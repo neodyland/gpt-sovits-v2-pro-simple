@@ -15,6 +15,8 @@ from transformers import (
 )
 from torch.nn import functional as F
 from .models import Bert, T2S, SV
+import time
+from asyncio import Lock
 
 device = "cuda" if torch.cuda.is_available() else "cpu"
 dtype = torch.float16 if torch.cuda.is_available() else torch.float32
@@ -80,6 +82,40 @@ def get_phones_and_bert(text: str, language: str, final=False):
     return phones, bert.to(dtype)
 
 
+class TTSTiming:
+    def __init__(self):
+        self.times = {}
+
+    def __call__(self, label: str):
+        class _Timer:
+            def __init__(self, outer: TTSTiming, label: str):
+                self.outer = outer
+                self.label = label
+
+            def __enter__(self):
+                self.start_time = time.time()
+
+            def __exit__(self, _exc_type, _exc_value, _traceback):
+                elapsed = time.time() - self.start_time
+                if self.label not in self.outer.times:
+                    self.outer.times[self.label] = 0.0
+                self.outer.times[self.label] += elapsed
+
+        return _Timer(self, label)
+
+    def __str__(self):
+        items = sorted(self.times.items(), key=lambda x: x[1])
+        return " | ".join(f"{k}: {v:.3f}s" for k, v in items)
+
+    def __enter__(self):
+        self.total_start_time = time.time()
+        return self
+
+    def __exit__(self, _exc_type, _exc_value, _traceback):
+        self.total_elapsed = time.time() - self.total_start_time
+        self.times["total"] = self.total_elapsed
+
+
 class TTS:
     resample_transform_dict = {}
 
@@ -103,6 +139,7 @@ class TTS:
             ),
             strict=True,
         )
+        self.vq_model_lock = Lock()
 
         self.zero_wav_torch = torch.zeros(
             int(self.sampling_rate * 0.3), dtype=dtype, device=device
@@ -187,6 +224,71 @@ class TTS:
             )
         return torch.stack(ges, 0).mean(0)
 
+    async def locked_synthesize(
+        self,
+        ref_wavs: list[bytes],
+        prompt_wav: Optional[bytes],
+        prompt_text: Optional[str],
+        prompt_language: Optional[str],
+        how_to_cut: str,
+        text: str,
+        text_language: str,
+        top_k=20,
+        top_p=0.6,
+        temperature=0.6,
+        speed=1,
+    ):
+        with TTSTiming() as timing:
+            with timing("encode_reference_prompt"):
+                if prompt_text is None:
+                    prompt = None
+                else:
+                    async with self.vq_model_lock:
+                        prompt, phones1, bert1 = self.reference_prompt(
+                            prompt_wav, prompt_text, prompt_language
+                        )
+                    ref_wavs = [prompt_wav]
+            with timing("encode_reference_audios"):
+                ge = self.reference_audios(ref_wavs)
+            audios = [self.zero_wav_torch]
+            for text in preprocess_text(how_to_cut, text, text_language):
+                print("Actual input target text (per sentence)", text)
+                with timing("get_phones_and_bert"):
+                    phones2, bert2 = get_phones_and_bert(text, text_language)
+                    if prompt_text is None:
+                        bert = bert2
+                        all_phoneme_ids = phones2
+                    else:
+                        bert = torch.cat([bert1, bert2], 1)
+                        all_phoneme_ids = phones1 + phones2
+
+                with timing("infer_panel_and_decode"):
+                    pred_semantic, idx = t2s_model.model.infer_panel(
+                        torch.LongTensor(all_phoneme_ids).to(device).unsqueeze(0),
+                        prompt,
+                        bert.to(device).unsqueeze(0),
+                        top_k=top_k,
+                        top_p=top_p,
+                        temperature=temperature,
+                    )
+                with timing("decode_audio"):
+                    async with self.vq_model_lock:
+                        audio = clip(
+                            self.vq_model.decode(
+                                pred_semantic[:, -idx:].unsqueeze(0),
+                                torch.LongTensor(phones2).to(device).unsqueeze(0),
+                                ge,
+                                speed=speed,
+                            )
+                        )
+                audios.append(audio)
+                audios.append(self.zero_wav_torch)
+            return (
+                32000,
+                torch.cat(audios, dim=0).float().cpu().detach().numpy(),
+                timing,
+            )
+
     @torch.inference_mode()
     def synthesize(
         self,
@@ -202,41 +304,51 @@ class TTS:
         temperature=0.6,
         speed=1,
     ):
-        if prompt_text is None:
-            prompt = None
-        else:
-            prompt, phones1, bert1 = self.reference_prompt(
-                prompt_wav, prompt_text, prompt_language
-            )
-            ref_wavs = [prompt_wav]
-        ge = self.reference_audios(ref_wavs)
-        audios = [self.zero_wav_torch]
-        for text in preprocess_text(how_to_cut, text, text_language):
-            print("Actual input target text (per sentence)", text)
-            phones2, bert2 = get_phones_and_bert(text, text_language)
-            if prompt_text is None:
-                bert = bert2
-                all_phoneme_ids = phones2
-            else:
-                bert = torch.cat([bert1, bert2], 1)
-                all_phoneme_ids = phones1 + phones2
+        with TTSTiming() as timing:
+            with timing("encode_reference_prompt"):
+                if prompt_text is None:
+                    prompt = None
+                else:
+                    prompt, phones1, bert1 = self.reference_prompt(
+                        prompt_wav, prompt_text, prompt_language
+                    )
+                    ref_wavs = [prompt_wav]
+            with timing("encode_reference_audios"):
+                ge = self.reference_audios(ref_wavs)
+            audios = [self.zero_wav_torch]
+            for text in preprocess_text(how_to_cut, text, text_language):
+                print("Actual input target text (per sentence)", text)
+                with timing("get_phones_and_bert"):
+                    phones2, bert2 = get_phones_and_bert(text, text_language)
+                    if prompt_text is None:
+                        bert = bert2
+                        all_phoneme_ids = phones2
+                    else:
+                        bert = torch.cat([bert1, bert2], 1)
+                        all_phoneme_ids = phones1 + phones2
 
-            pred_semantic, idx = t2s_model.model.infer_panel(
-                torch.LongTensor(all_phoneme_ids).to(device).unsqueeze(0),
-                prompt,
-                bert.to(device).unsqueeze(0),
-                top_k=top_k,
-                top_p=top_p,
-                temperature=temperature,
+                with timing("infer_panel_and_decode"):
+                    pred_semantic, idx = t2s_model.model.infer_panel(
+                        torch.LongTensor(all_phoneme_ids).to(device).unsqueeze(0),
+                        prompt,
+                        bert.to(device).unsqueeze(0),
+                        top_k=top_k,
+                        top_p=top_p,
+                        temperature=temperature,
+                    )
+                with timing("decode_audio"):
+                    audio = clip(
+                        self.vq_model.decode(
+                            pred_semantic[:, -idx:].unsqueeze(0),
+                            torch.LongTensor(phones2).to(device).unsqueeze(0),
+                            ge,
+                            speed=speed,
+                        )
+                    )
+                audios.append(audio)
+                audios.append(self.zero_wav_torch)
+            return (
+                32000,
+                torch.cat(audios, dim=0).float().cpu().detach().numpy(),
+                timing,
             )
-            audio = clip(
-                self.vq_model.decode(
-                    pred_semantic[:, -idx:].unsqueeze(0),
-                    torch.LongTensor(phones2).to(device).unsqueeze(0),
-                    ge,
-                    speed=speed,
-                )
-            )
-            audios.append(audio)
-            audios.append(self.zero_wav_torch)
-        return 32000, torch.cat(audios, dim=0).float().cpu().detach().numpy()
