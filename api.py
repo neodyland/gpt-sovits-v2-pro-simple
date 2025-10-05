@@ -6,6 +6,7 @@ torch.backends.cudnn.benchmark = True
 torch.set_float32_matmul_precision("medium")
 torch.autograd.set_grad_enabled(False)
 
+from asyncio import Lock
 from server.tts import TTS
 from server.textcut import Strategy
 from fastapi import FastAPI, Response, File, Form, UploadFile
@@ -15,6 +16,7 @@ from typing import Literal, Optional, List
 from typing_extensions import Annotated
 
 tts = TTS("v2proplus")
+lock = Lock()
 
 app = FastAPI()
 
@@ -49,19 +51,20 @@ async def synthesize(
 ):
     prompt_wav = await prompt_wav.read() if prompt_wav else None
     ref_wavs = [BytesIO(await f.read()) for f in ref_wavs]
-    sr, pcm, timing = await tts.locked_synthesize(
-        ref_wavs=ref_wavs,
-        prompt_wav=prompt_wav,
-        prompt_text=prompt_text,
-        prompt_language=prompt_language,
-        how_to_cut=how_to_cut,
-        text=text,
-        text_language=text_language,
-        top_k=top_k,
-        top_p=top_p,
-        temperature=temperature,
-        speed=speed,
-    )
+    async with lock:
+        sr, pcm, timing = tts.synthesize(
+            ref_wavs=ref_wavs,
+            prompt_wav=prompt_wav,
+            prompt_text=prompt_text,
+            prompt_language=prompt_language,
+            how_to_cut=how_to_cut,
+            text=text,
+            text_language=text_language,
+            top_k=top_k,
+            top_p=top_p,
+            temperature=temperature,
+            speed=speed,
+        )
     print(f"Time taken: {timing}")
     print(f"Output length: {len(pcm) / sr:.2f} seconds")
     with BytesIO() as buf:
