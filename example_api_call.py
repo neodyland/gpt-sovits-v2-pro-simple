@@ -6,6 +6,7 @@ from faster_whisper import WhisperModel
 import numpy as np
 from argparse import ArgumentParser
 import time
+from typing import Optional
 
 model = WhisperModel("large-v3-turbo")
 
@@ -45,9 +46,12 @@ def clip(y: np.ndarray, sr: int):
     return y_out
 
 
-def transcribe(wav: bytes):
+def transcribe(wav: bytes, language: Optional[str] = None):
     segments, info = model.transcribe(
-        BytesIO(wav), chunk_length=15, condition_on_previous_text=False
+        BytesIO(wav),
+        chunk_length=15,
+        condition_on_previous_text=False,
+        language=language,
     )
     return "".join([segment.text for segment in segments])
 
@@ -68,7 +72,7 @@ def synthesize(
             "audio/wav",
         )
     }
-    prompt_text = transcribe(wav)
+    prompt_text = transcribe(wav, prompt_language)
     print(f"Transcribed prompt text: {prompt_text}")
     data = {
         "prompt_text": prompt_text,

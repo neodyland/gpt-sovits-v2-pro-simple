@@ -142,13 +142,11 @@ def preprocess_text_inner(
     strategy: Strategy,
     text: str,
 ) -> list[str]:
-    print("Selected input text: ", text)
     text = text.strip("\n")
     if strategy in cu_map:
         text = cu_map[strategy](text)
     while "\n\n" in text:
         text = text.replace("\n\n", "\n")
-    print("Actual input text (each line):", text)
     _pre_texts = text.split("\n")
     _res_texts = []
     if all(text in [None, " ", "\n", ""] for text in _pre_texts):
