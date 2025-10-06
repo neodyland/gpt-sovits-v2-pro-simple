@@ -20,13 +20,15 @@ def inference(
     prompt_wav_path: Optional[str],
     *args,
 ):
+    if prompt_wav_path is None and (ref_wav_paths is None or len(ref_wav_paths) == 0):
+        return None
     ref_wav_paths = ref_wav_paths or []
     ref_wavs = [open(f, "rb").read() for f in ref_wav_paths]
     if prompt_wav_path is not None:
         prompt_wav = open(prompt_wav_path, "rb").read()
     sr, pcm, timing = tts.synthesize(ref_wavs, prompt_wav, *args)
     print(timing)
-    yield sr, (pcm * 32767).astype(np.int16)
+    return (sr, (pcm * 32767).astype(np.int16),)
 
 
 with gr.Blocks(title="GPT-SoVITS WebUI", analytics_enabled=False) as app:

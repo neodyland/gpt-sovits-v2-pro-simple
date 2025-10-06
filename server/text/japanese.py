@@ -52,7 +52,7 @@ def symbols_to_japanese(text: str):
     return text
 
 
-def preprocess_jap(text: str, with_prosody=False):
+def preprocess_jap(text: str):
     """Reference https://r9y9.github.io/ttslearn/latest/notebooks/ch10_Recipe-Tacotron.html"""
     text = symbols_to_japanese(text)
     # English words to lower case, should have no influence on japanese words.
@@ -62,11 +62,7 @@ def preprocess_jap(text: str, with_prosody=False):
     text = []
     for i, sentence in enumerate(sentences):
         if re.match(_japanese_characters, sentence):
-            if with_prosody:
-                text += pyopenjtalk_g2p_prosody(sentence)[1:-1]
-            else:
-                p = pyopenjtalk.g2p(sentence)
-                text += p.split(" ")
+            text += pyopenjtalk_g2p_prosody(sentence)[1:-1]
 
         if i < len(marks):
             if marks[i] == " ":  # 防止意外的UNK
@@ -165,8 +161,8 @@ def _numeric_feature_by_regex(regex, s):
     return int(match.group(1))
 
 
-def g2p(norm_text: str, with_prosody=True):
-    phones = preprocess_jap(norm_text, with_prosody)
+def g2p(norm_text: str):
+    phones = preprocess_jap(norm_text)
     phones = [post_replace_ph(i) for i in phones]
     # todo: implement tones and word2ph
     return phones

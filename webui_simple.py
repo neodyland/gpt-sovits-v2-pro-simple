@@ -11,7 +11,8 @@ import gradio as gr
 import numpy as np
 import librosa
 from io import BytesIO
-from example_api_call import transcribe, clip
+from typing import Optional
+from server.utils import clip, transcribe
 from scipy.io import wavfile
 
 
@@ -30,10 +31,12 @@ def load_and_clip_wav(wav_path: str):
 
 
 def inference(
-    prompt_wav_path: str,
+    prompt_wav_path: Optional[str],
     text: str,
     speed: float,
 ):
+    if prompt_wav_path is None or text.strip() == "":
+        return None, ""
     wav = load_and_clip_wav(prompt_wav_path)
     prompt_text = transcribe(wav)
     sr, pcm, timing = tts.synthesize(
