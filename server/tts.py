@@ -281,7 +281,7 @@ class TTS:
                 audios.append(audio)
                 audios.append(self.zero_wav_torch)
             return (
-                32000,
+                self.sampling_rate,
                 torch.cat(audios, dim=0).float().cpu().detach().numpy(),
                 timing,
             )

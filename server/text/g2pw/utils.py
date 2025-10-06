@@ -16,7 +16,6 @@ Credits
     This code is modified from https://github.com/GitYCC/g2pW
 """
 
-import os
 import re
 
 
@@ -83,63 +82,3 @@ def tokenize_and_map(tokenizer, text: str):
             index_map_from_text_to_token[token_pos] = i
 
     return tokens, index_map_from_text_to_token, index_map_from_token_to_text
-
-
-def _load_config(config_path: os.PathLike):
-    import importlib.util
-
-    spec = importlib.util.spec_from_file_location("__init__", config_path)
-    config = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(config)
-    return config
-
-
-default_config_dict = {
-    "manual_seed": 1313,
-    "model_source": "bert-base-chinese",
-    "window_size": 32,
-    "num_workers": 2,
-    "use_mask": True,
-    "use_char_phoneme": False,
-    "use_conditional": True,
-    "param_conditional": {
-        "affect_location": "softmax",
-        "bias": True,
-        "char-linear": True,
-        "pos-linear": False,
-        "char+pos-second": True,
-        "char+pos-second_lowrank": False,
-        "lowrank_size": 0,
-        "char+pos-second_fm": False,
-        "fm_size": 0,
-        "fix_mode": None,
-        "count_json": "train.count.json",
-    },
-    "lr": 5e-5,
-    "val_interval": 200,
-    "num_iter": 10000,
-    "use_focal": False,
-    "param_focal": {"alpha": 0.0, "gamma": 0.7},
-    "use_pos": True,
-    "param_pos ": {
-        "weight": 0.1,
-        "pos_joint_training": True,
-        "train_pos_path": "train.pos",
-        "valid_pos_path": "dev.pos",
-        "test_pos_path": "test.pos",
-    },
-}
-
-
-def load_config(config_path: os.PathLike, use_default: bool = False):
-    config = _load_config(config_path)
-    if use_default:
-        for attr, val in default_config_dict.items():
-            if not hasattr(config, attr):
-                setattr(config, attr, val)
-            elif isinstance(val, dict):
-                d = getattr(config, attr)
-                for dict_k, dict_v in val.items():
-                    if dict_k not in d:
-                        d[dict_k] = dict_v
-    return config

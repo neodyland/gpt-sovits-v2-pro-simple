@@ -1,7 +1,7 @@
 # This code is modified from https://github.com/PaddlePaddle/PaddleSpeech/tree/develop/paddlespeech/t2s/frontend/g2pw
 # This code is modified from https://github.com/GitYCC/g2pW
 
-import json
+import msgpack
 import os
 from typing import Any, Dict, List, Tuple
 
@@ -13,10 +13,7 @@ from pypinyin import Style, pinyin
 from transformers.models.auto.tokenization_auto import AutoTokenizer
 
 from ..zh_normalization.char_convert import tranditional_to_simplified
-from .dataset import get_char_phoneme_labels, get_phoneme_labels, prepare_onnx_input
-from .utils import load_config
-
-model_version = "1.1"
+from .dataset import prepare_onnx_input
 
 
 def predict(
@@ -51,7 +48,7 @@ class G2PWOnnxConverter:
         self,
         model_dir: str = "G2PWModel/",
         style: str = "bopomofo",
-        model_source: str = None,
+        model_source: str = "bert-base-chinese",
         enable_non_tradional_chinese: bool = False,
     ):
         sess_options = onnxruntime.SessionOptions()
@@ -62,34 +59,21 @@ class G2PWOnnxConverter:
         sess_options.intra_op_num_threads = 2 if torch.cuda.is_available() else 0
         if "CUDAExecutionProvider" in onnxruntime.get_available_providers():
             self.session_g2pW = onnxruntime.InferenceSession(
-                os.path.join(model_dir, "g2pW.onnx"),
+                os.path.join(model_dir, "model.onnx"),
                 sess_options=sess_options,
                 providers=["CUDAExecutionProvider", "CPUExecutionProvider"],
             )
         else:
             self.session_g2pW = onnxruntime.InferenceSession(
-                os.path.join(model_dir, "g2pW.onnx"),
+                os.path.join(model_dir, "model.onnx"),
                 sess_options=sess_options,
                 providers=["CPUExecutionProvider"],
             )
-        self.config = load_config(
-            config_path=os.path.join(model_dir, "config.py"), use_default=True
-        )
 
-        self.model_source = model_source if model_source else self.config.model_source
         self.enable_opencc = enable_non_tradional_chinese
 
-        self.tokenizer = AutoTokenizer.from_pretrained(self.model_source)
+        self.tokenizer = AutoTokenizer.from_pretrained(model_source)
 
-        polyphonic_chars_path = os.path.join(model_dir, "POLYPHONIC_CHARS.txt")
-        monophonic_chars_path = os.path.join(model_dir, "MONOPHONIC_CHARS.txt")
-        self.polyphonic_chars = [
-            line.split("\t")
-            for line in open(polyphonic_chars_path, encoding="utf-8")
-            .read()
-            .strip()
-            .split("\n")
-        ]
         self.non_polyphonic = {
             "一",
             "不",
@@ -112,17 +96,13 @@ class G2PWOnnxConverter:
             "噢",
         }
         self.non_monophonic = {"似", "攢"}
-        self.monophonic_chars = [
-            line.split("\t")
-            for line in open(monophonic_chars_path, encoding="utf-8")
-            .read()
-            .strip()
-            .split("\n")
-        ]
-        self.labels, self.char2phonemes = (
-            get_char_phoneme_labels(polyphonic_chars=self.polyphonic_chars)
-            if self.config.use_char_phoneme
-            else get_phoneme_labels(polyphonic_chars=self.polyphonic_chars)
+
+        self.monophonic_chars_dict = msgpack.load(
+            open("./data/g2pw_model/monophonic_chars_dict.msgpack", "rb")
+        )
+        self.labels = msgpack.load(open("./data/g2pw_model/labels.msgpack", "rb"))
+        self.char2phonemes = msgpack.load(
+            open("./data/g2pw_model/char2phonemes.msgpack", "rb")
         )
 
         self.chars = sorted(list(self.char2phonemes.keys()))
@@ -131,33 +111,23 @@ class G2PWOnnxConverter:
         for char in self.non_polyphonic:
             if char in self.polyphonic_chars_new:
                 self.polyphonic_chars_new.remove(char)
-
-        self.monophonic_chars_dict = {
-            char: phoneme for char, phoneme in self.monophonic_chars
-        }
         for char in self.non_monophonic:
             if char in self.monophonic_chars_dict:
                 self.monophonic_chars_dict.pop(char)
 
         self.pos_tags = ["UNK", "A", "C", "D", "I", "N", "P", "T", "V", "DE", "SHI"]
 
-        with open(
-            os.path.join(model_dir, "bopomofo_to_pinyin_wo_tune_dict.json"),
-            "r",
-            encoding="utf-8",
-        ) as fr:
-            self.bopomofo_convert_dict = json.load(fr)
+        self.bopomofo_convert_dict = msgpack.load(
+            open("./data/g2pw_model/bopomofo_to_pinyin_wo_tune_dict.msgpack", "rb")
+        )
         self.style_convert_func = {
             "bopomofo": lambda x: x,
             "pinyin": self._convert_bopomofo_to_pinyin,
         }[style]
 
-        with open(
-            os.path.join(model_dir, "char_bopomofo_dict.json"),
-            "r",
-            encoding="utf-8",
-        ) as fr:
-            self.char_bopomofo_dict = json.load(fr)
+        self.char_bopomofo_dict = msgpack.load(
+            open("./data/g2pw_model/char_bopomofo_dict.msgpack", "rb")
+        )
 
         if self.enable_opencc:
             self.cc = OpenCC("s2tw")
@@ -198,15 +168,13 @@ class G2PWOnnxConverter:
             chars=self.chars,
             texts=texts,
             query_ids=query_ids,
-            use_mask=self.config.use_mask,
+            use_mask=True,
             window_size=None,
         )
 
         preds, confidences = predict(
             session=self.session_g2pW, onnx_input=onnx_input, labels=self.labels
         )
-        if self.config.use_char_phoneme:
-            preds = [pred.split(" ")[1] for pred in preds]
 
         results = partial_results
         for sent_id, query_id, pred in zip(sent_ids, query_ids, preds):

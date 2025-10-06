@@ -1,41 +1,10 @@
 # modified from https://github.com/CjangCjengh/vits/blob/main/text/japanese.py
 import re
-import os
-import hashlib
 from ..symbols import punctuation
 
-try:
-    import pyopenjtalk
+import pyopenjtalk
 
-    def get_hash(fp: str) -> str:
-        hash_md5 = hashlib.md5()
-        with open(fp, "rb") as f:
-            for chunk in iter(lambda: f.read(4096), b""):
-                hash_md5.update(chunk)
-        return hash_md5.hexdigest()
-
-    USERDIC_CSV_PATH = "./data/ja_userdic/userdict.csv"
-    USERDIC_BIN_PATH = "./data/ja_userdic/user.dict"
-    USERDIC_HASH_PATH = "./data/ja_userdic/userdict.md5"
-    # 如果没有用户词典，就生成一个；如果有，就检查md5，如果不一样，就重新生成
-    if os.path.exists(USERDIC_CSV_PATH):
-        if (
-            not os.path.exists(USERDIC_BIN_PATH)
-            or get_hash(USERDIC_CSV_PATH)
-            != open(USERDIC_HASH_PATH, "r", encoding="utf-8").read()
-        ):
-            pyopenjtalk.mecab_dict_index(USERDIC_CSV_PATH, USERDIC_BIN_PATH)
-            with open(USERDIC_HASH_PATH, "w", encoding="utf-8") as f:
-                f.write(get_hash(USERDIC_CSV_PATH))
-
-    if os.path.exists(USERDIC_BIN_PATH):
-        pyopenjtalk.update_global_jtalk_with_user_dict(USERDIC_BIN_PATH)
-except Exception:
-    # print(e)
-    import pyopenjtalk
-
-    # failed to load user dictionary, ignore.
-    pass
+pyopenjtalk.update_global_jtalk_with_user_dict("./data/dict/ja.dict")
 
 # Regular expression matching Japanese without punctuation marks:
 _japanese_characters = re.compile(

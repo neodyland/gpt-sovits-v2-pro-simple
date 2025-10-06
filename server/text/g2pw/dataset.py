@@ -22,8 +22,6 @@ import numpy as np
 
 from .utils import tokenize_and_map
 
-ANCHOR_CHAR = "▁"
-
 
 def prepare_onnx_input(
     tokenizer,
@@ -152,29 +150,3 @@ def _truncate(
         [i - token_start if i is not None else None for i in text2token[start:end]],
         [(s - start, e - start) for s, e in token2text[token_start:token_end]],
     )
-
-
-def get_phoneme_labels(
-    polyphonic_chars: List[List[str]],
-) -> Tuple[List[str], Dict[str, List[int]]]:
-    labels = sorted(list(set([phoneme for char, phoneme in polyphonic_chars])))
-    char2phonemes = {}
-    for char, phoneme in polyphonic_chars:
-        if char not in char2phonemes:
-            char2phonemes[char] = []
-        char2phonemes[char].append(labels.index(phoneme))
-    return labels, char2phonemes
-
-
-def get_char_phoneme_labels(
-    polyphonic_chars: List[List[str]],
-) -> Tuple[List[str], Dict[str, List[int]]]:
-    labels = sorted(
-        list(set([f"{char} {phoneme}" for char, phoneme in polyphonic_chars]))
-    )
-    char2phonemes = {}
-    for char, phoneme in polyphonic_chars:
-        if char not in char2phonemes:
-            char2phonemes[char] = []
-        char2phonemes[char].append(labels.index(f"{char} {phoneme}"))
-    return labels, char2phonemes

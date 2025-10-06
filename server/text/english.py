@@ -1,5 +1,3 @@
-import pickle
-import os
 import re
 import wordsegment
 from g2p_en import G2p
@@ -10,14 +8,9 @@ from builtins import str as unicode
 from .en_normalization import normalize
 from nltk.tokenize import TweetTokenizer
 from nltk import pos_tag
+import msgpack
 
 word_tokenize = TweetTokenizer().tokenize
-
-CMU_DICT_PATH = "./data/dict/cmudict.rep"
-CMU_DICT_FAST_PATH = "./data/dict/cmudict-fast.rep"
-CMU_DICT_HOT_PATH = "./data/dict/engdict-hot.rep"
-CACHE_PATH = "./data/dict/engdict_cache.pickle"
-NAMECACHE_PATH = "./data/dict/namedict_cache.pickle"
 
 
 # 适配中文及 g2p_en 标点
@@ -125,108 +118,6 @@ def replace_consecutive_punctuation(text):
     return result
 
 
-def read_dict():
-    g2p_dict = {}
-    start_line = 49
-    with open(CMU_DICT_PATH) as f:
-        line = f.readline()
-        line_index = 1
-        while line:
-            if line_index >= start_line:
-                line = line.strip()
-                word_split = line.split("  ")
-                word = word_split[0].lower()
-
-                syllable_split = word_split[1].split(" - ")
-                g2p_dict[word] = []
-                for syllable in syllable_split:
-                    phone_split = syllable.split(" ")
-                    g2p_dict[word].append(phone_split)
-
-            line_index = line_index + 1
-            line = f.readline()
-
-    return g2p_dict
-
-
-def read_dict_new():
-    g2p_dict = {}
-    with open(CMU_DICT_PATH) as f:
-        line = f.readline()
-        line_index = 1
-        while line:
-            if line_index >= 57:
-                line = line.strip()
-                word_split = line.split("  ")
-                word = word_split[0].lower()
-                g2p_dict[word] = [word_split[1].split(" ")]
-
-            line_index = line_index + 1
-            line = f.readline()
-
-    with open(CMU_DICT_FAST_PATH) as f:
-        line = f.readline()
-        line_index = 1
-        while line:
-            if line_index >= 0:
-                line = line.strip()
-                word_split = line.split(" ")
-                word = word_split[0].lower()
-                if word not in g2p_dict:
-                    g2p_dict[word] = [word_split[1:]]
-
-            line_index = line_index + 1
-            line = f.readline()
-
-    return g2p_dict
-
-
-def hot_reload_hot(g2p_dict):
-    with open(CMU_DICT_HOT_PATH) as f:
-        line = f.readline()
-        line_index = 1
-        while line:
-            if line_index >= 0:
-                line = line.strip()
-                word_split = line.split(" ")
-                word = word_split[0].lower()
-                # 自定义发音词直接覆盖字典
-                g2p_dict[word] = [word_split[1:]]
-
-            line_index = line_index + 1
-            line = f.readline()
-
-    return g2p_dict
-
-
-def cache_dict(g2p_dict, file_path):
-    with open(file_path, "wb") as pickle_file:
-        pickle.dump(g2p_dict, pickle_file)
-
-
-def get_dict():
-    if os.path.exists(CACHE_PATH):
-        with open(CACHE_PATH, "rb") as pickle_file:
-            g2p_dict = pickle.load(pickle_file)
-    else:
-        g2p_dict = read_dict_new()
-        cache_dict(g2p_dict, CACHE_PATH)
-
-    g2p_dict = hot_reload_hot(g2p_dict)
-
-    return g2p_dict
-
-
-def get_namedict():
-    if os.path.exists(NAMECACHE_PATH):
-        with open(NAMECACHE_PATH, "rb") as pickle_file:
-            name_dict = pickle.load(pickle_file)
-    else:
-        name_dict = {}
-
-    return name_dict
-
-
 def text_normalize(text):
     # todo: eng text normalize
 
@@ -249,8 +140,9 @@ class en_G2p(G2p):
         wordsegment.load()
 
         # 扩展过时字典, 添加姓名字典
-        self.cmu = get_dict()
-        self.namedict = get_namedict()
+        with open("./data/dict/cmudict.msgpack", "rb") as f:
+            self.cmu = msgpack.unpack(f, raw=False)
+        self.namedict = {}
 
         # 剔除读音错误的几个缩写
         for word in ["AE", "AI", "AR", "IOS", "HUD", "OS"]:
