@@ -1,6 +1,6 @@
 import re
 
-from pypinyin import lazy_pinyin, Style
+from pypinyin import Style
 from pypinyin.contrib.tone_convert import to_finals_tone3, to_initials
 
 from ..symbols import punctuation
@@ -60,21 +60,6 @@ def g2p(text):
     sentences = [i for i in re.split(pattern, text) if i.strip() != ""]
     phones, word2ph = _g2p(sentences)
     return phones, word2ph
-
-
-def _get_initials_finals(word):
-    initials = []
-    finals = []
-
-    orig_initials = lazy_pinyin(word, neutral_tone_with_five=True, style=Style.INITIALS)
-    orig_finals = lazy_pinyin(
-        word, neutral_tone_with_five=True, style=Style.FINALS_TONE3
-    )
-
-    for c, v in zip(orig_initials, orig_finals):
-        initials.append(c)
-        finals.append(v)
-    return initials, finals
 
 
 must_erhua = {
@@ -283,19 +268,6 @@ def _g2p(segments):
     return phones_list, word2ph
 
 
-def replace_punctuation_with_en(text):
-    text = text.replace("嗯", "恩").replace("呣", "母")
-    pattern = re.compile("|".join(re.escape(p) for p in rep_map.keys()))
-
-    replaced_text = pattern.sub(lambda x: rep_map[x.group()], text)
-
-    replaced_text = re.sub(
-        r"[^\u4e00-\u9fa5A-Za-z" + "".join(punctuation) + r"]+", "", replaced_text
-    )
-
-    return replaced_text
-
-
 def replace_consecutive_punctuation(text):
     punctuations = "".join(re.escape(p) for p in punctuation)
     pattern = f"([{punctuations}])([{punctuations}])+"
@@ -322,8 +294,3 @@ if __name__ == "__main__":
     text = "你好"
     text = text_normalize(text)
     print(g2p(text))
-
-
-# # 示例用法
-# text = "这是一个示例文本：,你好！这是一个测试..."
-# print(g2p_paddle(text))  # 输出: 这是一个示例文本你好这是一个测试

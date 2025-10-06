@@ -7,23 +7,12 @@ from ..symbols import symbols
 from typing import List, Tuple, Optional
 
 language_module_map = {
-    "zh": chinese2,
-    "ja": japanese,
-    "en": english,
-    "ko": korean,
-    "yue": cantonese,
+    "zh": (chinese2.text_normalize, chinese2.g2p),
+    "ja": (japanese.text_normalize, japanese.g2p),
+    "en": (english.text_normalize, english.g2p),
+    "ko": (korean.text_normalize, korean.g2p),
+    "yue": (cantonese.text_normalize, cantonese.g2p),
 }
-
-
-def load_language_module(language):
-    mod = language_module_map[language]
-    text_normalize = getattr(mod, "text_normalize", None)
-    g2p = getattr(mod, "g2p", None)
-    if g2p is None:
-        raise NotImplementedError(f"{language} g2p not found!")
-    return text_normalize, g2p
-
-
 _symbol_to_id = {s: i for i, s in enumerate(symbols)}
 
 
@@ -45,20 +34,31 @@ special = [
 ]
 
 
+def clean_special(text, special_s, target_symbol, text_normalize, g2p):
+    text = text.replace(special_s, ",")
+    norm_text = text_normalize(text)
+    phones = g2p(norm_text)
+    new_ph = []
+    for ph in phones[0]:
+        assert ph in symbols
+        if ph == ",":
+            new_ph.append(target_symbol)
+        else:
+            new_ph.append(ph)
+    return new_ph, phones[1], norm_text
+
+
 def clean_text_inner(
     text: str, language: str
 ) -> Tuple[List[str], Optional[List[int]], str]:
     if language not in language_module_map:
         language = "en"
         text = " "
-    text_normalize, g2p = load_language_module(language)
+    text_normalize, g2p = language_module_map[language]
     for special_s, special_l, target_symbol in special:
         if special_s in text and language == special_l:
             return clean_special(text, special_s, target_symbol, text_normalize, g2p)
-    if text_normalize:
-        norm_text = text_normalize(text)
-    else:
-        norm_text = text
+    norm_text = text_normalize(text)
     if language == "zh" or language == "yue":  ##########
         phones, word2ph = g2p(norm_text)
         assert len(phones) == sum(word2ph)
@@ -73,22 +73,6 @@ def clean_text_inner(
         word2ph = None
     phones = ["UNK" if ph not in symbols else ph for ph in phones]
     return phones, word2ph, norm_text
-
-
-def clean_special(text, special_s, target_symbol, text_normalize, g2p):
-    text = text.replace(special_s, ",")
-    if text_normalize is None:
-        raise ValueError("text_normalize is None!")
-    norm_text = text_normalize(text)
-    phones = g2p(norm_text)
-    new_ph = []
-    for ph in phones[0]:
-        assert ph in symbols
-        if ph == ",":
-            new_ph.append(target_symbol)
-        else:
-            new_ph.append(ph)
-    return new_ph, phones[1], norm_text
 
 
 def clean_text(text: str, language: str):

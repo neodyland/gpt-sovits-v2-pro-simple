@@ -133,7 +133,7 @@ def text_normalize(text):
     return text
 
 
-class en_G2p(G2p):
+class ENG2p(G2p):
     def __init__(self):
         super().__init__()
         # 分词初始化
@@ -246,7 +246,7 @@ class en_G2p(G2p):
         return [phone for comp in comps for phone in self.qryword(comp)]
 
 
-_g2p = en_G2p()
+_g2p = ENG2p()
 
 
 def g2p(text):

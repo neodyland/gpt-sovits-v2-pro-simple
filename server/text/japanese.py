@@ -75,10 +75,7 @@ def preprocess_jap(text: str, with_prosody=False):
     return text
 
 
-def text_normalize(text):
-    # todo: jap text normalize
-
-    # 避免重复标点引起的参考泄露
+def text_normalize(text: str):
     text = replace_consecutive_punctuation(text)
     return text
 

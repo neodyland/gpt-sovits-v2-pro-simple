@@ -130,9 +130,9 @@ class MultiHeadAttention(nn.Module):
                 "Relative attention is only available for self-attention."
             )
             key_relative_embeddings = self._get_relative_embeddings(self.emb_rel_k, t_s)
-            rel_logits = self._matmul_with_relative_keys(
-                query / math.sqrt(self.k_channels), key_relative_embeddings
-            )
+            rel_logits = (
+                query / math.sqrt(self.k_channels)
+            ) @ key_relative_embeddings.unsqueeze(0).transpose(-2, -1)
             scores_local = self._relative_position_to_absolute_position(rel_logits)
             scores = scores + scores_local
         if mask is not None:
@@ -145,31 +145,11 @@ class MultiHeadAttention(nn.Module):
             value_relative_embeddings = self._get_relative_embeddings(
                 self.emb_rel_v, t_s
             )
-            output = output + self._matmul_with_relative_values(
-                relative_weights, value_relative_embeddings
-            )
+            output = output + relative_weights @ value_relative_embeddings.unsqueeze(0)
         output = (
             output.transpose(2, 3).contiguous().view(b, d, t_t)
         )  # [b, n_h, t_t, d_k] -> [b, d, t_t]
         return output, p_attn
-
-    def _matmul_with_relative_values(self, x, y):
-        """
-        x: [b, h, l, m]
-        y: [h or 1, m, d]
-        ret: [b, h, l, d]
-        """
-        ret = torch.matmul(x, y.unsqueeze(0))
-        return ret
-
-    def _matmul_with_relative_keys(self, x, y):
-        """
-        x: [b, h, l, d]
-        y: [h or 1, m, d]
-        ret: [b, h, l, m]
-        """
-        ret = torch.matmul(x, y.unsqueeze(0).transpose(-2, -1))
-        return ret
 
     def _get_relative_embeddings(self, relative_embeddings, length):
         # Pad first before slice to avoid using cond ops.
