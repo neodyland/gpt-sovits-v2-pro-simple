@@ -1,16 +1,16 @@
+from typing import Optional
+
+import gradio as gr
+import numpy as np
 import torch
+
+from server.tts import TTS, languages
 
 torch.backends.cuda.matmul.allow_tf32 = True
 torch.backends.cudnn.allow_tf32 = True
 torch.backends.cudnn.benchmark = True
 torch.set_float32_matmul_precision("medium")
 torch.autograd.set_grad_enabled(False)
-
-from server.tts import TTS, languages
-import gradio as gr
-import numpy as np
-from typing import Optional
-
 
 tts = TTS("v2proplus")
 
@@ -28,7 +28,10 @@ def inference(
         prompt_wav = open(prompt_wav_path, "rb").read()
     sr, pcm, timing = tts.synthesize(ref_wavs, prompt_wav, *args)
     print(timing)
-    return (sr, (pcm * 32767).astype(np.int16),)
+    return (
+        sr,
+        (pcm * 32767).astype(np.int16),
+    )
 
 
 with gr.Blocks(title="GPT-SoVITS WebUI", analytics_enabled=False) as app:

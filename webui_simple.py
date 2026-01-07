@@ -1,21 +1,20 @@
+from io import BytesIO
+from typing import Optional
+
+import gradio as gr
+import librosa
+import numpy as np
 import torch
+from scipy.io import wavfile
+
+from server.tts import TTS
+from server.utils import clip, transcribe
 
 torch.backends.cuda.matmul.allow_tf32 = True
 torch.backends.cudnn.allow_tf32 = True
 torch.backends.cudnn.benchmark = True
 torch.set_float32_matmul_precision("medium")
 torch.autograd.set_grad_enabled(False)
-
-from server.tts import TTS
-import gradio as gr
-import numpy as np
-import librosa
-from io import BytesIO
-from typing import Optional
-from server.utils import clip, transcribe
-from scipy.io import wavfile
-
-
 tts = TTS("v2proplus")
 
 

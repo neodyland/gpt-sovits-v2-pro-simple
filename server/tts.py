@@ -1,21 +1,22 @@
-from typing import List, Optional
+import json
+import time
+from io import BytesIO
+from typing import List, Literal, Optional
+
+import librosa
+import safetensors.torch as st
 import torch
 import torchaudio
-import librosa
-from .textcut import preprocess_text, append_final_punctuation
-from .lang_segmenter import segment
-from .gpt_sovits.models import SynthesizerTrn
-from .text.text_cleaner import clean_text
-import safetensors.torch as st
-import json
-from io import BytesIO
-from typing import Literal
+from torch.nn import functional as F
 from transformers import (
     HubertModel,
 )
-from torch.nn import functional as F
-from .models import Bert, T2S, SV
-import time
+
+from .gpt_sovits.models import SynthesizerTrn
+from .lang_segmenter import segment
+from .models import SV, T2S, Bert
+from .text.text_cleaner import clean_text
+from .textcut import append_final_punctuation, preprocess_text
 
 device = "cuda" if torch.cuda.is_available() else "cpu"
 dtype = torch.float16 if torch.cuda.is_available() else torch.float32
@@ -235,7 +236,7 @@ class TTS:
         top_k=20,
         top_p=0.6,
         temperature=0.6,
-        speed=1,
+        speed=1.0,
     ):
         with TTSTiming() as timing:
             with timing("encode_reference_prompt"):

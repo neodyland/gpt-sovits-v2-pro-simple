@@ -1,19 +1,21 @@
+from asyncio import Lock
+from io import BytesIO
+from typing import List, Literal, Optional
+
 import torch
+from fastapi import FastAPI, File, Form, Response, UploadFile
+from scipy.io import wavfile
+from typing_extensions import Annotated
+
+from server.textcut import Strategy
+from server.tts import TTS
 
 torch.backends.cuda.matmul.allow_tf32 = True
+
 torch.backends.cudnn.allow_tf32 = True
 torch.backends.cudnn.benchmark = True
 torch.set_float32_matmul_precision("medium")
 torch.autograd.set_grad_enabled(False)
-
-from asyncio import Lock
-from server.tts import TTS
-from server.textcut import Strategy
-from fastapi import FastAPI, Response, File, Form, UploadFile
-from scipy.io import wavfile
-from io import BytesIO
-from typing import Literal, Optional, List
-from typing_extensions import Annotated
 
 tts = TTS("v2proplus")
 lock = Lock()
@@ -49,12 +51,12 @@ async def synthesize(
     temperature: float = Form(1.0, ge=0, le=1),
     speed: float = Form(1, ge=0.6, le=1.65),
 ):
-    prompt_wav = await prompt_wav.read() if prompt_wav else None
-    ref_wavs = [BytesIO(await f.read()) for f in ref_wavs]
+    prompt_wav_bytes = await prompt_wav.read() if prompt_wav else None
+    ref_wavs_bytesio = [BytesIO(await f.read()) for f in ref_wavs]
     async with lock:
         sr, pcm, timing = tts.synthesize(
-            ref_wavs=ref_wavs,
-            prompt_wav=prompt_wav,
+            ref_wavs=ref_wavs_bytesio,
+            prompt_wav=prompt_wav_bytes,
             prompt_text=prompt_text,
             prompt_language=prompt_language,
             how_to_cut=how_to_cut,
