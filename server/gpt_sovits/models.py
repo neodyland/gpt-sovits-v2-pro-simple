@@ -1,25 +1,24 @@
 import torch
 from torch import nn
 from torch.nn import functional as F
+from torch.nn.utils import weight_norm
 
+from ..symbols import symbols
 from .module.attentions import Encoder as AttEncoder
-from .module.mrte_model import MRTE
-from .module.quantize import ResidualVectorQuantizer
-from .module.modules import (
-    Flip,
-    ResBlock1,
-    ResBlock2,
-    ResidualCouplingLayer,
-    MelStyleEncoder,
-    LRELU_SLOPE,
-)
 from .module.commons import (
     init_weights,
     sequence_mask,
 )
-from torch.nn.utils import weight_norm
-
-from ..symbols import symbols
+from .module.modules import (
+    LRELU_SLOPE,
+    Flip,
+    MelStyleEncoder,
+    ResBlock1,
+    ResBlock2,
+    ResidualCouplingLayer,
+)
+from .module.mrte_model import MRTE
+from .module.quantize import ResidualVectorQuantizer
 
 
 class TextEncoder(nn.Module):

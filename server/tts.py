@@ -261,7 +261,7 @@ class TTS:
                         bert = torch.cat([bert1, bert2], 1)
                         all_phoneme_ids = phones1 + phones2
 
-                with timing("infer_panel_and_decode"):
+                with timing("infer_panel"):
                     pred_semantic, idx = t2s_model.model.infer_panel(
                         torch.LongTensor(all_phoneme_ids).to(device).unsqueeze(0),
                         prompt,
