@@ -1,16 +1,16 @@
 # modified from https://github.com/yangdongchao/SoundStorm/blob/master/soundstorm/s1/AR/models/t2s_model.py
 # reference: https://github.com/lifeiteng/vall-e
-from typing import Optional, List
+from typing import List, Optional
 
 import torch
 from torch import nn
 from torch.nn import functional as F
 from tqdm import tqdm
 
+from .embedding import SinePositionalEmbedding, TokenEmbedding
 from .sample import (
     sample,
 )
-from .embedding import SinePositionalEmbedding, TokenEmbedding
 
 
 class T2SMLP(nn.Module):
@@ -291,6 +291,7 @@ class Text2SemanticDecoder(nn.Module):
         )
         return xy_attn_mask
 
+    @torch.compile(dynamic=True, fullgraph=True)
     def encode_input(
         self, x: torch.LongTensor, bert_feature: torch.LongTensor, max_len=2048
     ):
@@ -355,7 +356,6 @@ class Text2SemanticDecoder(nn.Module):
                     pbar.set_description("bad zero prediction")
                 pbar.set_postfix({"T2S Decoding EOS": f"[{prefix_len} -> {y.size(1)}]"})
                 break
-
             y_emb = self.ar_audio_embedding(y[:, -1:])
             x = self.ar_audio_position.update(y_emb, y_len + idx)
 

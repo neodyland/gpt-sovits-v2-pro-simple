@@ -33,10 +33,10 @@
 
 from typing import Optional
 
-from einops import rearrange
 import torch
-from torch import nn
 import torch.nn.functional as F
+from einops import rearrange
+from torch import nn
 
 
 class EuclideanCodebook(nn.Module):

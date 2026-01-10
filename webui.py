@@ -5,6 +5,7 @@ import gradio as gr
 import librosa
 import numpy as np
 import torch
+import torch._inductor.config as inductor_config
 from scipy.io import wavfile
 
 from server.tts import TTS, languages
@@ -15,6 +16,8 @@ torch.backends.cudnn.allow_tf32 = True
 torch.backends.cudnn.benchmark = True
 torch.set_float32_matmul_precision("medium")
 torch.autograd.set_grad_enabled(False)
+inductor_config.freezing = True
+inductor_config.epilogue_fusion = True
 
 tts = TTS("v2proplus")
 

@@ -1,9 +1,11 @@
-import requests
-import librosa
-from scipy.io import wavfile
-from io import BytesIO
-from argparse import ArgumentParser
 import time
+from argparse import ArgumentParser
+from io import BytesIO
+
+import librosa
+import requests
+from scipy.io import wavfile
+
 from server.utils import clip, transcribe
 
 

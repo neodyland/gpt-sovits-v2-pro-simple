@@ -1,8 +1,9 @@
-from faster_whisper import WhisperModel
-import numpy as np
-from typing import Optional
-import librosa
 from io import BytesIO
+from typing import Optional
+
+import librosa
+import numpy as np
+from faster_whisper import WhisperModel
 
 model = WhisperModel("large-v3-turbo")
 

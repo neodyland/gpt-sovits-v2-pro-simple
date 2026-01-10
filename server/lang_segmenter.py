@@ -1,5 +1,5 @@
-from typing import List, Tuple
 import re
+from typing import List, Tuple
 
 import fast_langdetect
 

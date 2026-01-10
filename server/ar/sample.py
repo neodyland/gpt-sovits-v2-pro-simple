@@ -1,9 +1,9 @@
 # modified from https://github.com/yangdongchao/SoundStorm/blob/master/soundstorm/s1/AR/models/utils.py
 # reference: https://github.com/lifeiteng/vall-e
-from typing import Tuple, Optional
+from typing import Optional, Tuple
 
-from torch.nn import functional as F
 import torch
+from torch.nn import functional as F
 
 
 def multinomial_sample_one_no_sync(
@@ -55,6 +55,7 @@ def logits_to_probs(
     return probs
 
 
+@torch.compile(dynamic=True, fullgraph=True)
 def sample(
     logits,
     previous_tokens: Optional[torch.Tensor] = None,

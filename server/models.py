@@ -1,11 +1,13 @@
 import os
 
 os.environ["TOKENIZERS_PARALLELISM"] = "false"
-import torch
-from typing import List, Optional
-from transformers import AutoModelForMaskedLM, AutoTokenizer
-import safetensors.torch as st
 import json
+from typing import List, Optional
+
+import safetensors.torch as st
+import torch
+from transformers import AutoModelForMaskedLM, AutoTokenizer
+
 from .ar.t2s_model import Text2SemanticDecoder
 from .eres2net.eres2netv2 import ERes2NetV2
 from .eres2net.kaldi import fbank

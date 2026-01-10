@@ -126,9 +126,7 @@ class TTS:
         self.sampling_rate = hps["data"]["sampling_rate"]
         self.win_length = hps["data"]["win_length"]
         self.vq_model = (
-            SynthesizerTrn(
-                **hps["model"],
-            )
+            SynthesizerTrn(**hps["model"], hop_length=self.hop_length)
             .to(dtype=dtype, device=device)
             .eval()
         )
@@ -238,6 +236,7 @@ class TTS:
         temperature=0.6,
         speed=1.0,
     ):
+        torch.compiler.cudagraph_mark_step_begin()
         with TTSTiming() as timing:
             with timing("encode_reference_prompt"):
                 if prompt_text is None:

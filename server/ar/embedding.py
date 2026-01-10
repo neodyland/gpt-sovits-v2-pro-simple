@@ -71,6 +71,4 @@ class SinePositionalEmbedding(nn.Module):
         return self.dropout(output)
 
     def update(self, x: torch.Tensor, l: int) -> torch.Tensor:
-        return x * self.x_scale + self.alpha * self.pe[:, l].to(
-            dtype=x.dtype, device=x.device
-        )
+        return x * self.x_scale + self.alpha * self.pe[:, l]

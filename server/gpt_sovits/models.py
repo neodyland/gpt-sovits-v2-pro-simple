@@ -65,6 +65,7 @@ class TextEncoder(nn.Module):
 
         self.proj = nn.Conv1d(hidden_channels, out_channels * 2, 1)
 
+    @torch.compile(fullgraph=True, dynamic=True)
     def forward(self, y, y_lengths, text, text_lengths, ge, speed=1, test=None):
         y_mask = torch.unsqueeze(sequence_mask(y_lengths, y.size(2)), 1).to(y.dtype)
 
@@ -143,6 +144,7 @@ class ResidualCouplingBlock(nn.Module):
             )
             self.flows.append(Flip())
 
+    @torch.compile(fullgraph=True, dynamic=True)
     def forward(self, x: torch.Tensor, x_mask: torch.Tensor, g: torch.Tensor):
         for flow in reversed(self.flows):
             x = flow(x, x_mask, g=g)
@@ -215,6 +217,16 @@ class Generator(nn.Module):
         return x
 
 
+def pad_to_multiple(x, multiple=32, dim=-1):
+    length = x.size(dim)
+    if length % multiple == 0:
+        return x
+    padding_needed = multiple - (length % multiple)
+    pad_dims = [0, 0] * (x.dim() - 1)
+    pad_dims[-2] = padding_needed
+    return F.pad(x, (0, padding_needed), mode="replicate")
+
+
 class SynthesizerTrn(nn.Module):
     """
     Synthesizer for Training
@@ -235,6 +247,7 @@ class SynthesizerTrn(nn.Module):
         upsample_rates,
         upsample_initial_channel,
         upsample_kernel_sizes,
+        hop_length: int,
         gin_channels=0,
     ):
         super().__init__()
@@ -273,6 +286,7 @@ class SynthesizerTrn(nn.Module):
         self.sv_emb = nn.Linear(20480, gin_channels)
         self.ge_to512 = nn.Linear(gin_channels, 512)
         self.prelu = nn.PReLU(num_parameters=gin_channels)
+        self.hop_length = hop_length
 
     def get_ge(self, refer: torch.Tensor, sv_emb: torch.Tensor) -> torch.Tensor:
         refer_lengths = torch.LongTensor([refer.size(2)]).to(refer.device)
@@ -293,6 +307,8 @@ class SynthesizerTrn(nn.Module):
         noise_scale=0.5,
         speed=1,
     ) -> torch.Tensor:
+        orig_length = codes.size(2) * 2 * self.hop_length
+        codes = pad_to_multiple(codes, multiple=32)
         y_lengths = torch.LongTensor([codes.size(2) * 2]).to(codes.device)
         text_lengths = torch.LongTensor([text.size(-1)]).to(text.device)
 
@@ -313,7 +329,7 @@ class SynthesizerTrn(nn.Module):
         z = self.flow(z_p, y_mask, g=ge)
 
         o = self.dec((z * y_mask)[:, :, :], g=ge)
-        return o[0][0]
+        return o[..., :orig_length][0][0]
 
     def extract_latent(self, x: torch.Tensor) -> torch.Tensor:
         ssl = self.ssl_proj(x)

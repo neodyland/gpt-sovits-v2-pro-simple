@@ -3,6 +3,7 @@ from io import BytesIO
 from typing import List, Literal, Optional
 
 import torch
+import torch._inductor.config as inductor_config
 from fastapi import FastAPI, File, Form, Response, UploadFile
 from scipy.io import wavfile
 from typing_extensions import Annotated
@@ -11,11 +12,12 @@ from server.textcut import Strategy
 from server.tts import TTS
 
 torch.backends.cuda.matmul.allow_tf32 = True
-
 torch.backends.cudnn.allow_tf32 = True
 torch.backends.cudnn.benchmark = True
 torch.set_float32_matmul_precision("medium")
 torch.autograd.set_grad_enabled(False)
+inductor_config.freezing = True
+inductor_config.epilogue_fusion = True
 
 tts = TTS("v2proplus")
 lock = Lock()
